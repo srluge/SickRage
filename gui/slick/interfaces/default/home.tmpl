@@ -17,13 +17,15 @@
 #set $today = str($datetime.date.today().toordinal())
 #set $layout = $sickbeard.HOME_LAYOUT
 
-#set status_quality = '(' + ','.join([str(x) for x in $Quality.SNATCHED + $Quality.SNATCHED_PROPER]) + ')'
+#set status_quality  = '(' + ','.join([str(x) for x in $Quality.SNATCHED + $Quality.SNATCHED_PROPER]) + ')'
 #set status_download = '(' + ','.join([str(x) for x in $Quality.DOWNLOADED + [$ARCHIVED]]) + ')'
 
 #set $sql_statement = 'SELECT showid, '
 
-#set $sql_statement += '(SELECT COUNT(*) FROM tv_episodes WHERE showid=tv_eps.showid AND season > 0 AND episode > 0 AND airdate > 1 AND status IN ' + $status_quality + ') AS ep_snatched, '
+#set $sql_statement += '(SELECT COUNT(*) FROM tv_episodes WHERE showid=tv_eps.showid AND season > 0 AND episode > 0 AND airdate > 1 AND status IN ' + $status_quality  + ') AS ep_snatched, '
 #set $sql_statement += '(SELECT COUNT(*) FROM tv_episodes WHERE showid=tv_eps.showid AND season > 0 AND episode > 0 AND airdate > 1 AND status IN ' + $status_download + ') AS ep_downloaded, '
+#set $sql_statement += '(SELECT COUNT(*) FROM tv_episodes WHERE showid=tv_eps.showid AND season > 0 AND episode > 0 AND airdate > 1 AND status = ' + str($WANTED) + ')      AS ep_wanted, '
+#set $sql_statement += '(SELECT COUNT(*) FROM tv_episodes WHERE showid=tv_eps.showid AND season > 0 AND episode > 0 AND airdate > 1 AND status = ' + str($FAILED) + ')      AS ep_failed, '
 
 #set $sql_statement += '(SELECT COUNT(*) FROM tv_episodes WHERE showid=tv_eps.showid AND season > 0 AND episode > 0 AND airdate > 1 '
 #set $sql_statement += ' AND ((airdate <= ' + $today + ' AND (status = ' + str($SKIPPED) + ' OR status = ' + str($WANTED) + ' OR status = ' + str($FAILED) + ')) '
@@ -493,6 +495,8 @@ $myShowList.sort(lambda x, y: cmp(x.name, y.name))
 
     #set $cur_airs_next = ''
     #set $cur_snatched = 0
+    #set $cur_wanted = 0
+    #set $cur_failed = 0
     #set $cur_downloaded = 0
     #set $cur_total = 0
     #set $download_stat_tip = ''
@@ -514,6 +518,17 @@ $myShowList.sort(lambda x, y: cmp(x.name, y.name))
         #if not $cur_total:
             #set $cur_total = 0
         #end if
+
+        #set $cur_wanted = $show_stat[$curShow.indexerid]['ep_wanted']
+        #if not $cur_wanted:
+            #set $cur_wanted = 0
+        #end if
+
+        #set $cur_failed = $show_stat[$curShow.indexerid]['ep_failed']
+        #if not $cur_failed:
+            #set $cur_failed = 0
+        #end if
+
     #end if
 
     #if $cur_total != 0:
@@ -522,6 +537,14 @@ $myShowList.sort(lambda x, y: cmp(x.name, y.name))
         #if $cur_snatched > 0:
             #set $download_stat = download_stat + "+" + str($cur_snatched)
             #set $download_stat_tip = download_stat_tip + "&#013;" + "Snatched: " + str($cur_snatched)
+        #end if
+        #if $cur_wanted > 0:
+             #set $download_stat = download_stat + "-" + str($cur_wanted)
+             #set $download_stat_tip = download_stat_tip + "&#013;" + "Wanted: " + str($cur_wanted)
+        #end if
+        #if $cur_failed > 0:
+             #set $download_stat = download_stat + "!" + str($cur_failed)
+             #set $download_stat_tip = download_stat_tip + "&#013;" + "Failed: " + str($cur_failed)
         #end if
         #set $download_stat = download_stat + " / " + str($cur_total)
         #set $download_stat_tip = download_stat_tip + "&#013;" + "Total: " + str($cur_total)

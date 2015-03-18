@@ -313,7 +313,12 @@ def determineReleaseName(dir_name=None, nzb_name=None):
 
     if nzb_name is not None:
         logger.log(u"Using nzb_name for release name.")
-        return nzb_name.rpartition('.')[0]
+
+        # Remove extension (.nzb) or, in case of torrents, 
+        # just return the torrent name (nzb_name)
+        p = nzb_name.rpartition('.')[0]
+        return p if p else nzb_name
+
 
     if dir_name is None:
         return None

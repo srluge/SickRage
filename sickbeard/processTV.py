@@ -40,7 +40,6 @@ import lib.shutil_custom
 
 shutil.copyfile = lib.shutil_custom.copyfile_custom
 
-
 class ProcessResult:
     def __init__(self):
        self.result = True
@@ -112,13 +111,29 @@ def logHelper(logMessage, logLevel=logger.INFO):
 
 def processDir(dirName, nzbName=None, process_method=None, force=False, is_priority=None, failed=False, type="auto"):
     """
-    Scans through the files in dirName and processes whatever media files it finds
-
+    Scans through the files in dirName and processes whatever media files it finds.
+    
     dirName: The folder name to look in
-    nzbName: The NZB name which resulted in this folder being downloaded
-    force: True to postprocess already postprocessed files
-    failed: Boolean for whether or not the download failed
-    type: Type of postprocessing auto or manual
+    nzbName: The NZB or torrent which resulted in a folder/file being downloaded
+
+             dirName/nzbName == file: Single file torrent downloaded content
+             dirName         == dir : Directory with Torrent or NZB downloaded content
+
+             WARNING: Always make sure downloaded content exists, even if failed = true. 
+                      'Delete failed' option and 'Move' process method are otherwise not
+                      save to use and may recursively remove source directories. Before
+                      calling *always* make sure dirName exists, and in case of singe 
+                      torrents that the file dirName/nzbName exists. An API change is
+                      required to improve on this. For now it remains backwards compatible 
+                      and therefore inherits existing issues.
+
+    force  : True to postprocess already postprocessed files
+    failed : Boolean for whether or not the download failed
+    type   : Type of postprocessing
+      - manual: Recursively post-process all file(s)/dir(s) in dirName 
+                (Automatically selected when post-processing TV_DOWNLOAD_DIR.)
+      - auto  : Non-recursively post-process file(s) in dirName. Support for single-file
+                torrents included.
     """
 
     result = ProcessResult()
@@ -126,6 +141,15 @@ def processDir(dirName, nzbName=None, process_method=None, force=False, is_prior
     result.output += logHelper(u"Processing folder " + dirName, logger.DEBUG)
 
     result.output += logHelper(u"TV_DOWNLOAD_DIR: " + sickbeard.TV_DOWNLOAD_DIR, logger.DEBUG)
+
+    result.output += logHelper(u"Torrent-/NZB-name: " + str(nzbName)       , logger.DEBUG)
+    result.output += logHelper(u"Process method   : " + str(process_method), logger.DEBUG)
+    result.output += logHelper(u"Process type     : " + str(type)          , logger.DEBUG)
+    result.output += logHelper(u"Failed download  : " + str(failed)        , logger.DEBUG)
+
+    # Determine torrent type (False if not a torrent)
+    torrent_type = get_torrent_type(dirName, nzbName)
+    result.output += logHelper(u"Torrent-type     : " + str(torrent_type)  , logger.DEBUG)
 
     # if they passed us a real dir then assume it's the one we want
     if ek.ek(os.path.isdir, dirName):
@@ -142,6 +166,18 @@ def processDir(dirName, nzbName=None, process_method=None, force=False, is_prior
         result.output += logHelper(
             u"Unable to figure out what folder to process. If your downloader and SickRage aren't on the same PC make sure you fill out your TV download dir in the config.",
             logger.DEBUG)
+        return result.output
+
+    # Handle failed torrent
+    if nzbname_is_torrent(nzbName) and failed:
+        # Mark torrent as failed
+        process_failed(dirName, nzbName, result)
+
+        if result.result:
+            result.output += logHelper(u"Successfully processed")
+        else:
+            result.output += logHelper(u"Problem(s) during processing", logger.WARNING)
+
         return result.output
 
     path, dirs, files = get_path_dir_files(dirName, nzbName, type)
@@ -234,11 +270,14 @@ def processDir(dirName, nzbName=None, process_method=None, force=False, is_prior
 
                 delete_files(processPath, notwantedFiles, result)
 
-                if process_method == "move" and \
-                                ek.ek(os.path.normpath, processPath) != ek.ek(os.path.normpath,
-                                                                              sickbeard.TV_DOWNLOAD_DIR):
+                processNormDir = ek.ek(os.path.normpath, processPath)
+                tvNormDir      = ek.ek(os.path.normpath, sickbeard.TV_DOWNLOAD_DIR)
+                if process_method == "move"    and \
+                   processNormDir != tvNormDir and \
+                   torrent_type   != TorrentType.SINGLE_FILE:
                     if delete_folder(processPath, check_empty=False):
                         result.output += logHelper(u"Deleted folder: " + processPath, logger.DEBUG)
+
 
     if result.result:
         result.output += logHelper(u"Successfully processed")
@@ -485,12 +524,17 @@ def get_path_dir_files(dirName, nzbName, type):
         for path, dirs, files in ek.ek(os.walk, dirName):
             break
     else:
-        path, dirs = ek.ek(os.path.split, dirName)  #Script Post Processing
-        if not nzbName is None and not nzbName.endswith('.nzb') and os.path.isfile(
-                os.path.join(dirName, nzbName)):  #For single torrent file without Dir
+        # Post process downloaded content for one NZB/Torrent
+
+        path, dirs   = ek.ek(os.path.split, dirName)  #Script Post Processing
+        torrent_type = get_torrent_type(dirName, nzbName)
+
+        if torrent_type == TorrentType.SINGLE_FILE:
+            # Single file torrent
             dirs = []
             files = [os.path.join(dirName, nzbName)]
         else:
+            # NZB or torrent directory
             dirs = [dirs]
             files = []
 
@@ -515,8 +559,13 @@ def process_failed(dirName, nzbName, result):
             result.output += processor.log
 
         if sickbeard.DELETE_FAILED and result.result:
-            if delete_folder(dirName, check_empty=False):
-                result.output += logHelper(u"Deleted folder: " + dirName, logger.DEBUG)
+            torrent_type = get_torrent_type(dirName, nzbName)
+
+            if torrent_type == TorrentType.SINGLE_FILE:
+                delete_files(dirName, [nzbName], result)
+            else:
+                if delete_folder(dirName, check_empty=False):
+                    result.output += logHelper(u"Deleted folder: " + dirName, logger.DEBUG)
 
         if result.result:
             result.output += logHelper(u"Failed Download Processing succeeded: (" + str(nzbName) + ", " + dirName + ")")
@@ -524,3 +573,43 @@ def process_failed(dirName, nzbName, result):
             result.output += logHelper(
                 u"Failed Download Processing failed: (" + str(nzbName) + ", " + dirName + "): " + process_fail_message,
                 logger.WARNING)
+
+class TorrentType:
+    ALL      = [ "single-file", "multi-file" ]
+    SINGLE_FILE, MULTI_FILE = ALL
+
+def nzbname_is_torrent(nzbName):
+    """
+       Determine if nzbName actually refers to an nzb. Then nzbName value 
+       should end with .nzb for that to be the case.
+    """
+
+    if not nzbName is None \
+       and not nzbName.endswith('.nzb'):
+        return True
+    else:
+        return False
+
+def get_torrent_type(dirName, nzbName):
+    """
+    Determine torrent-type based on dirName and nzbName.
+
+    dirName: Folder containing torrent content
+    nzbName: Name of the torrent
+
+    return: False if not a torrent else TorrentType (SINGLE_FILE,
+            MULTI_FILE)
+    """
+
+    if not nzbname_is_torrent(nzbName):
+        return False
+
+    path = os.path.join(dirName, nzbName)
+
+    if   os.path.isfile(path):
+        return TorrentType.SINGLE_FILE
+    elif os.path.isdir(dirName):
+        return TorrentType.MULTI_FILE
+    else:
+        return False
+
