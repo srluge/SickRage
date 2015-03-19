@@ -60,15 +60,22 @@ def delete_folder(folder, check_empty=True):
     if check_empty:
         check_files = ek.ek(os.listdir, folder)
         if check_files:
+            logger.log(u"Not deleting folder " + folder + " found the following files: " + str(check_files), logger.INFO)
             return False
-
-    # try deleting folder
-    try:
-        logger.log(u"Deleting folder: " + folder)
-        shutil.rmtree(folder)
-    except (OSError, IOError), e:
-        logger.log(u"Warning: unable to delete folder: " + folder + ": " + ex(e), logger.WARNING)
-        return False
+        
+        try:
+            logger.log(u"Deleting folder (if it's empty): " + folder)
+            os.rmdir(folder)
+        except (OSError, IOError), e:
+            logger.log(u"Warning: unable to delete folder: " + folder + ": " + ex(e), logger.WARNING)
+            return False
+    else:
+        try:
+            logger.log(u"Deleting folder: " + folder)
+            shutil.rmtree(folder)
+        except (OSError, IOError), e:
+            logger.log(u"Warning: unable to delete folder: " + folder + ": " + ex(e), logger.WARNING)
+            return False
 
     return True
 
@@ -187,6 +194,7 @@ def processDir(dirName, nzbName=None, process_method=None, force=False, is_prior
     # Don't post process if files are still being synced and option is activated
     if SyncFiles and sickbeard.POSTPONE_IF_SYNC_FILES:
         result.output += logHelper(u"Found temporary sync files, skipping post processing", logger.WARNING)
+        result.output += logHelper(u"Sync Files: " + str(SyncFiles) + " in path " + path, logger.WARNING)
         return result.output
 
     result.output += logHelper(u"PostProcessing Path: " + path, logger.DEBUG)
@@ -234,12 +242,16 @@ def processDir(dirName, nzbName=None, process_method=None, force=False, is_prior
         result.result = True
 
         for processPath, processDir, fileList in ek.ek(os.walk, ek.ek(os.path.join, path, dir), topdown=False):
-
+            
+            if (not validateDir(path, processPath, nzbNameOriginal, failed, result)):
+                continue
+            
             SyncFiles = filter(helpers.isSyncFile, fileList)
 
             # Don't post process if files are still being synced and option is activated
             if SyncFiles and sickbeard.POSTPONE_IF_SYNC_FILES:
                 result.output += logHelper(u"Found temporary sync files, skipping post processing", logger.WARNING)
+                result.output += logHelper(u"Sync Files: " + str(SyncFiles) + " in path " + processPath, logger.WARNING)
                 return result.output
 
             rarFiles = filter(helpers.isRarFile, fileList)
@@ -248,6 +260,7 @@ def processDir(dirName, nzbName=None, process_method=None, force=False, is_prior
             videoFiles = filter(helpers.isMediaFile, fileList)
             videoInRar = filter(helpers.isMediaFile, rarContent)
             notwantedFiles = [x for x in fileList if x not in videoFiles]
+            result.output += logHelper(u"Found unwanted files: " + str(notwantedFiles), logger.INFO)
 
             #Don't Link media when the media is extracted from a rar in the same path
             if process_method in ('hardlink', 'symlink') and videoInRar:
@@ -411,7 +424,7 @@ def unRAR(path, rarFiles, force, result):
                 result.result = False
                 continue
             except NoFileToExtract:
-                result.output += logHelper(u"Failed Unrar archive {0}: Unrar: No file to extract, file already exist?".format(archive), logger.ERROR)
+                result.output += logHelper(u"Failed Unrar archive {0}: Unrar: No file extracted, check the parent folder and destination file permissions.".format(archive), logger.ERROR)
                 result.result = False
                 continue
             except GenericRARError:
