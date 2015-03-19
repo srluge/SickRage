@@ -3,6 +3,8 @@
 #
 # This file is part of SickRage.
 #
+# 2015/03/19 srluge Added failed torrent handling
+#
 # SickRage is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
