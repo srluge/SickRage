@@ -60,6 +60,19 @@ if sys.hexversion >= 0x020600F0:
 if sys.version_info >= (2, 7, 9):
     import ssl
     ssl._create_default_https_context = ssl._create_unverified_context
+else:
+    try:
+        import cryptography
+    except ImportError:
+        try:
+            from OpenSSL.version import __version__ as pyOpenSSL_Version
+            if int(pyOpenSSL_Version.replace('.', '')[:3]) > 13:
+                raise ImportError
+        except ImportError:
+            print('\nSNI is disabled with pyOpenSSL >= 0.14 when the cryptography module is missing,\n' +
+                    'you will encounter SSL errors with HTTPS! To fix this issue:\n' +
+                    'pip install pyopenssl==0.13.1 (easy) or pip install cryptography (pita)')
+
 
 import locale
 import datetime
@@ -367,7 +380,7 @@ class SickRage(object):
 
         # Start an update if we're supposed to
         if self.forceUpdate or sickbeard.UPDATE_SHOWS_ON_START:
-            sickbeard.showUpdateScheduler.action.run(force=True)  # @UndefinedVariable
+            sickbeard.showUpdateScheduler.forceRun()
 
         # Launch browser
         if sickbeard.LAUNCH_BROWSER and not (self.noLaunch or self.runAsDaemon):
@@ -444,7 +457,7 @@ class SickRage(object):
         Populates the showList with shows from the database
         """
 
-        logger.log(u"Loading initial show list")
+        logger.log(u"Loading initial show list", logger.DEBUG)
 
         myDB = db.DBConnection()
         sqlResults = myDB.select("SELECT * FROM tv_shows")
@@ -516,7 +529,7 @@ class SickRage(object):
                                       sys.executable,
                                       sickbeard.MY_FULLNAME]
 
-                if popen_list:
+                if popen_list and not sickbeard.NO_RESTART:
                     popen_list += sickbeard.MY_ARGS
                     if '--nolaunch' not in popen_list:
                         popen_list += ['--nolaunch']

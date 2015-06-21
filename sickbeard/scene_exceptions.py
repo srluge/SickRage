@@ -176,7 +176,7 @@ def retrieve_exceptions():
             url_data = helpers.getURL(url)
             if url_data is None:
                 # When urlData is None, trouble connecting to github
-                logger.log(u"Check scene exceptions update failed. Unable to get URL: " + url, logger.ERROR)
+                logger.log(u"Check scene exceptions update failed. Unable to get URL: " + url, logger.WARNING)
                 continue
 
             setLastRefresh(sickbeard.indexerApi(indexer).name)
@@ -239,9 +239,9 @@ def retrieve_exceptions():
 
     # since this could invalidate the results of the cache we clear it out after updating
     if changed_exceptions:
-        logger.log(u"Updated scene exceptions")
+        logger.log(u"Updated scene exceptions", logger.DEBUG)
     else:
-        logger.log(u"No scene exceptions update needed")
+        logger.log(u"No scene exceptions update needed", logger.DEBUG)
 
     # cleanup
     exception_dict.clear()
@@ -306,7 +306,11 @@ def _xem_exceptions_fetcher():
                 continue
 
             for indexerid, names in parsedJSON['data'].items():
-                xem_exception_dict[int(indexerid)] = names
+                try:
+                    xem_exception_dict[int(indexerid)] = names
+                except Exception as e:
+                    logger.log(u"XEM: Rejected entry: indexerid:{0}; names:{1}".format(indexerid, names), logger.WARNING)
+                    logger.log(u"XEM: Rejected entry error message:{0}".format(str(e)), logger.DEBUG)
 
         setLastRefresh('xem')
 

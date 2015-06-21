@@ -49,9 +49,11 @@ from sickbeard import notifiers
 from sickbeard import postProcessor
 from sickbeard import subtitles
 from sickbeard import history
+from sickbeard.blackandwhitelist import BlackAndWhiteList
 from sickbeard import sbdatetime
 from sickbeard import network_timezones
 from dateutil.tz import *
+from lib.subliminal.exceptions import ServiceError
 
 from sickbeard import encodingKludge as ek
 
@@ -112,7 +114,8 @@ class TVShow(object):
         self.isDirGood = False
         self.episodes = {}
         self.nextaired = ""
-
+        self.release_groups = None
+        
         otherShow = helpers.findCertainShow(sickbeard.showList, self.indexerid)
         if otherShow != None:
             raise exceptions.MultipleShowObjectsException("Can't create a show if it already exists")
@@ -336,7 +339,7 @@ class TVShow(object):
             logger.log(str(self.indexerid) + u": Show dir doesn't exist, skipping NFO generation")
             return False
 
-        logger.log(str(self.indexerid) + u": Writing NFOs for show")
+        logger.log(str(self.indexerid) + u": Writing NFOs for show", logger.DEBUG)
         for cur_provider in sickbeard.metadata_provider_dict.values():
             result = cur_provider.create_show_metadata(self) or result
 
@@ -361,7 +364,7 @@ class TVShow(object):
             logger.log(str(self.indexerid) + u": Show dir doesn't exist, skipping NFO generation")
             return
 
-        logger.log(str(self.indexerid) + u": Writing NFOs for all episodes")
+        logger.log(str(self.indexerid) + u": Writing NFOs for all episodes", logger.DEBUG)
 
         myDB = db.DBConnection()
         sqlResults = myDB.select("SELECT * FROM tv_episodes WHERE showid = ? AND location != ''", [self.indexerid])
@@ -402,10 +405,10 @@ class TVShow(object):
     def loadEpisodesFromDir(self):
 
         if not ek.ek(os.path.isdir, self._location):
-            logger.log(str(self.indexerid) + u": Show dir doesn't exist, not loading episodes from disk")
+            logger.log(str(self.indexerid) + u": Show dir doesn't exist, not loading episodes from disk", logger.DEBUG)
             return
 
-        logger.log(str(self.indexerid) + u": Loading all episodes from the show directory " + self._location)
+        logger.log(str(self.indexerid) + u": Loading all episodes from the show directory " + self._location, logger.DEBUG)
 
         # get file list
         mediaFiles = helpers.listMediaFiles(self._location)
@@ -463,7 +466,7 @@ class TVShow(object):
 
     def loadEpisodesFromDB(self):
 
-        logger.log(u"Loading all episodes from the DB")
+        logger.log(u"Loading all episodes from the DB", logger.DEBUG)
 
         myDB = db.DBConnection()
         sql = "SELECT * FROM tv_episodes WHERE showid = ?"
@@ -546,7 +549,7 @@ class TVShow(object):
             return None
 
         logger.log(
-            str(self.indexerid) + u": Loading all episodes from " + sickbeard.indexerApi(self.indexer).name + "..")
+            str(self.indexerid) + u": Loading all episodes from " + sickbeard.indexerApi(self.indexer).name + "..", logger.DEBUG)
 
         scannedEps = {}
 
@@ -757,7 +760,7 @@ class TVShow(object):
 
     def loadFromDB(self, skipNFO=False):
 
-        logger.log(str(self.indexerid) + u": Loading show info from database")
+        logger.log(str(self.indexerid) + u": Loading show info from database", logger.DEBUG)
 
         myDB = db.DBConnection()
         sqlResults = myDB.select("SELECT * FROM tv_shows WHERE indexer_id = ?", [self.indexerid])
@@ -820,6 +823,9 @@ class TVShow(object):
             if not self.imdbid:
                 self.imdbid = sqlResults[0]["imdb_id"]
 
+            if self.is_anime:
+                self.release_groups = BlackAndWhiteList(self.indexerid)  
+                
         # Get IMDb_info from database
         myDB = db.DBConnection()
         sqlResults = myDB.select("SELECT * FROM imdb_info WHERE indexer_id = ?", [self.indexerid])
@@ -835,7 +841,7 @@ class TVShow(object):
 
     def loadFromIndexer(self, cache=True, tvapi=None, cachedSeason=None):
 
-        logger.log(str(self.indexerid) + u": Loading show info from " + sickbeard.indexerApi(self.indexer).name)
+        logger.log(str(self.indexerid) + u": Loading show info from " + sickbeard.indexerApi(self.indexer).name, logger.DEBUG)
 
         # There's gotta be a better way of doing this but we don't wanna
         # change the cache value elsewhere
@@ -903,7 +909,7 @@ class TVShow(object):
             self.imdbid = i.title2imdbID(self.name, kind='tv series')
 
         if self.imdbid:
-            logger.log(str(self.indexerid) + u": Loading show info from IMDb")
+            logger.log(str(self.indexerid) + u": Loading show info from IMDb", logger.DEBUG)
 
             imdbTv = i.get_movie(str(re.sub("[^0-9]", "", self.imdbid)))
 
@@ -1042,7 +1048,7 @@ class TVShow(object):
     def populateCache(self):
         cache_inst = image_cache.ImageCache()
 
-        logger.log(u"Checking & filling cache for show " + self.name)
+        logger.log(u"Checking & filling cache for show " + self.name, logger.DEBUG)
         cache_inst.fill_cache(self)
 
     def refreshDir(self):
@@ -1055,7 +1061,7 @@ class TVShow(object):
         self.loadEpisodesFromDir()
 
         # run through all locations from DB, check that they exist
-        logger.log(str(self.indexerid) + u": Loading all episodes with a location from the database")
+        logger.log(str(self.indexerid) + u": Loading all episodes with a location from the database", logger.DEBUG)
 
         myDB = db.DBConnection()
         sqlResults = myDB.select("SELECT * FROM tv_episodes WHERE showid = ? AND location != ''", [self.indexerid])
@@ -1082,12 +1088,12 @@ class TVShow(object):
                 # check if downloaded files still exist, update our data if this has changed
                 if not sickbeard.SKIP_REMOVED_FILES:
                     with curEp.lock:
-                        # if it used to have a file associated with it and it doesn't anymore then set it to IGNORED
+                        # if it used to have a file associated with it and it doesn't anymore then set it to sickbeard.EP_DEFAULT_DELETED_STATUS
                         if curEp.location and curEp.status in Quality.DOWNLOADED:
                             logger.log(str(self.indexerid) + u": Location for " + str(season) + "x" + str(
-                                episode) + " doesn't exist, removing it and changing our status to IGNORED",
+                                episode) + " doesn't exist, removing it and changing our status to " + statusStrings[sickbeard.EP_DEFAULT_DELETED_STATUS],
                                        logger.DEBUG)
-                            curEp.status = IGNORED
+                            curEp.status = sickbeard.EP_DEFAULT_DELETED_STATUS
                             curEp.subtitles = list()
                             curEp.subtitles_searchcount = 0
                             curEp.subtitles_lastsearch = str(datetime.datetime.min)
@@ -1198,7 +1204,7 @@ class TVShow(object):
         return toReturn
 
 
-    def wantEpisode(self, season, episode, quality, manualSearch=False):
+    def wantEpisode(self, season, episode, quality, manualSearch=False, downCurQuality=False):
 
         logger.log(u"Checking if found episode " + str(season) + "x" + str(episode) + " is wanted at quality " +
                    Quality.qualityStrings[quality], logger.DEBUG)
@@ -1230,21 +1236,22 @@ class TVShow(object):
             logger.log(u"Existing episode status is skipped/ignored/archived, ignoring found episode", logger.DEBUG)
             return False
 
+        curStatus, curQuality = Quality.splitCompositeStatus(epStatus)
+
         # if it's one of these then we want it as long as it's in our allowed initial qualities
         if quality in anyQualities + bestQualities:
             if epStatus in (WANTED, UNAIRED, SKIPPED):
                 logger.log(u"Existing episode status is wanted/unaired/skipped, getting found episode", logger.DEBUG)
                 return True
-            #elif manualSearch:
-            #    logger.log(
-            #        u"Usually ignoring found episode, but forced search allows the quality, getting found episode",
-            #        logger.DEBUG)
-            #    return True
+            elif manualSearch:
+                if (downCurQuality and quality >= curQuality) or (not downCurQuality and quality > curQuality):
+                    logger.log(
+                        u"Usually ignoring found episode, but forced search allows the quality, getting found episode",
+                        logger.DEBUG)
+                    return True
             else:
                 logger.log(u"Quality is on wanted list, need to check if it's better than existing quality",
                            logger.DEBUG)
-
-        curStatus, curQuality = Quality.splitCompositeStatus(epStatus)
 
         # if we are re-downloading then we only want it if it's in our bestQualities list and better than what we have
         if curStatus in Quality.DOWNLOADED + Quality.SNATCHED + Quality.SNATCHED_PROPER + Quality.SNATCHED_BEST and quality in bestQualities and quality > curQuality:
@@ -1264,7 +1271,7 @@ class TVShow(object):
 
     def getOverview(self, epStatus):
 
-        if epStatus == WANTED and not self.paused:
+        if epStatus == WANTED:
             return Overview.WANTED
         elif epStatus in (UNAIRED, UNKNOWN):
             return Overview.UNAIRED
@@ -1289,9 +1296,8 @@ class TVShow(object):
             if epStatus == DOWNLOADED and curQuality == Quality.UNKNOWN:
                 return Overview.QUAL
             elif epStatus in (SNATCHED, SNATCHED_PROPER, SNATCHED_BEST):
-                if curQuality < maxBestQuality:
-                    return Overview.QUAL
                 return Overview.SNATCHED
+            # if they don't want re-downloads then we call it good if they have anything
             elif maxBestQuality == None:
                 return Overview.GOOD
             # if the want only first match and already have one call it good
@@ -1437,7 +1443,9 @@ class TVEpisode(object):
                     for subtitle in subtitles.get(video):
                         added_subtitles.append(subtitle.language.alpha2)
                         helpers.chmodAsParent(subtitle.path)
-
+        except ServiceError as e:
+            logger.log("Service is unavailable: {0}".format(str(e)), logger.INFO)
+            return
         except Exception as e:
             logger.log("Error occurred when downloading subtitles: " + str(e), logger.ERROR)
             return
@@ -1737,7 +1745,7 @@ class TVEpisode(object):
         if not ek.ek(os.path.isdir,
                      self.show._location) and not sickbeard.CREATE_MISSING_SHOW_DIRS and not sickbeard.ADD_SHOWS_WO_DIR:
             logger.log(
-                u"The show dir is missing, not bothering to change the episode statuses since it'd probably be invalid")
+                u"The show dir " + str(self.show._location) + " is missing, not bothering to change the episode statuses since it'd probably be invalid")
             return
 
         if self.location:
@@ -1770,7 +1778,10 @@ class TVEpisode(object):
 
                 # if we somehow are still UNKNOWN then just use the shows defined default status or SKIPPED
                 elif self.status == UNKNOWN:
-                    self.status = self.show.default_ep_status
+                    if self.season > 0: #If it's not a special
+                        self.status = self.show.default_ep_status
+                    else:
+                        self.status = SKIPPED
 
                 else:
                     logger.log(

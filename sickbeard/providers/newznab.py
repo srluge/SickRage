@@ -239,7 +239,7 @@ class NewznabProvider(generic.NZBProvider):
         else:
             logger.log(u"Unknown error given from " + self.name + ": " + err_desc, logger.ERROR)
 
-    def _doSearch(self, search_params, search_mode='eponly', epcount=0, age=0):
+    def _doSearch(self, search_params, search_mode='eponly', epcount=0, age=0, epObj=None):
 
         self._checkAuth()
 
@@ -423,7 +423,7 @@ class NewznabCache(tvcache.TVCache):
 
         tvrageid = 0
         for attr in item['newznab_attr'] if isinstance(item['newznab_attr'], list) else [item['newznab_attr']]:
-            if attr['name'] == 'tvrageid':
+            if attr['name'] == 'tvrageid' or attr['name'] == 'rageid':
                 tvrageid = int(attr['value'] or 0)
                 break
 
