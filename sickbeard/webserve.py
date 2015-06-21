@@ -1447,7 +1447,7 @@ class Home(WebRoot):
             showObj.sports = sports
             showObj.subtitles = subtitles
             showObj.air_by_date = air_by_date
-            showObj.default_ep_status = int(defaultEpStatus)
+            #showObj.default_ep_status = int(defaultEpStatus)
 
             if not directCall:
                 showObj.lang = indexer_lang
@@ -4477,6 +4477,19 @@ class ConfigProviders(Config):
                         kwargs[curTorrentProvider.getID() + '_confirmed'])
                 except:
                     curTorrentProvider.confirmed = 0
+
+            if hasattr(curTorrentProvider, 'ranked'):
+                try:
+                    curTorrentProvider.ranked = config.checkbox_to_value(
+                        kwargs[curTorrentProvider.getID() + '_ranked'])
+                except:
+                    curTorrentProvider.ranked = 0
+
+            if hasattr(curTorrentProvider, 'sorting'):
+                try:
+                    curTorrentProvider.sorting = str(kwargs[curTorrentProvider.getID() + '_sorting']).strip()
+                except:
+                     curTorrentProvider.sorting = 'seeders'
 
             if hasattr(curTorrentProvider, 'proxy'):
                 try:
