@@ -65,7 +65,7 @@ class RarbgProvider(generic.TorrentProvider):
         self.tokenExpireDate = None
 
         self.urls = {'url': u'https://rarbg.com',
-                     'token': u'https://torrentapi.org/pubapi_v2.php?get_token=get_token&format=json&app_id=sickrage',
+                     'token': u'http://torrentapi.org/pubapi_v2.php?get_token=get_token&format=json&app_id=sickrage',
                      'listing': u'https://torrentapi.org/pubapi_v2.php?mode=list&app_id=sickrage',
                      'search': u'https://torrentapi.org/pubapi_v2.php?mode=search&app_id=sickrage&search_string={search_string}',
                      'search_tvdb': u'https://torrentapi.org/pubapi_v2.php?mode=search&app_id=sickrage&search_tvdb={tvdb}&search_string={search_string}',
@@ -109,10 +109,10 @@ class RarbgProvider(generic.TorrentProvider):
         resp_json = None
 
         try:
-            response = self.session.get(self.urls['token'], timeout=30, verify=False, headers=self.headers)
+            response = self.session.get(self.urls['token'], timeout=30, headers=self.headers)
             response.raise_for_status()
             resp_json = response.json()
-        except RequestException as e:
+        except (RequestException, BaseSSLError) as e:
             logger.log(u'Unable to connect to {name} provider: {error}'.format(name=self.name, error=ex(e)), logger.ERROR)
             return False
 

@@ -43,13 +43,14 @@ import sickbeard
 import subliminal
 import adba
 from lib import requests
+import certifi
 import xmltodict
 
 import subprocess
 
 from sickbeard.exceptions import MultipleShowObjectsException, ex
 from sickbeard import logger, classes
-from sickbeard.common import USER_AGENT, mediaExtensions, subtitleExtensions
+from sickbeard.common import USER_AGENT, cpu_presets, mediaExtensions, subtitleExtensions
 from sickbeard import db
 from sickbeard import encodingKludge as ek
 from sickbeard import notifiers
@@ -137,10 +138,7 @@ def remove_non_release_groups(name):
         elif remove_type == 'searchre':
             _name = re.sub(r'(?i)' + remove_string, '', _name)
 
-    #if _name != name:
-    #    logger.log(u'Change title from {old_name} to {new_name}'.format(old_name=name, new_name=_name), logger.DEBUG)
-
-    return _name
+    return _name.strip('.- ')
 
 
 def replaceExtension(filename, newExt):
@@ -162,6 +160,9 @@ def replaceExtension(filename, newExt):
     else:
         return sepFile[0] + "." + newExt
 
+
+def notTorNZBFile(filename):
+    return not (filename.endswith(".torrent") or filename.endswith(".nzb"))
 
 def isSyncFile(filename):
     extension = filename.rpartition(".")[2].lower()
@@ -708,7 +709,7 @@ def sanitizeSceneName(name, anime=False):
     """
 
     if not name:
-        return u''
+        return ''
 
     bad_chars = u',:()!?\u2019'
     if not anime:
@@ -716,7 +717,7 @@ def sanitizeSceneName(name, anime=False):
 
     # strip out any bad chars
     for x in bad_chars:
-        name = u'' + name.replace(x, "")
+        name = name.replace(x, "")
 
     # tidy up stuff that doesn't belong in scene names
     name = name.replace("- ", ".").replace(" ", ".").replace("&", "and").replace('/', '.')
@@ -1281,7 +1282,62 @@ def codeDescription(status_code):
         logger.log(u"Unknown error code. Please submit an issue", logger.WARNING)
         return 'unknown'
 
-def getURL(url, post_data=None, params=None, headers={}, timeout=30, session=None, json=False, proxyGlypeProxySSLwarning=None):
+
+def headURL(url, params=None, headers={}, timeout=30, session=None, json=False, proxyGlypeProxySSLwarning=None):
+    """
+    Checks if URL is valid, without reading it
+    """
+
+    # request session
+    cache_dir = sickbeard.CACHE_DIR or _getTempDir()
+    session = CacheControl(sess=session, cache=caches.FileCache(os.path.join(cache_dir, 'sessions')))
+
+    # request session headers
+    session.headers.update({'User-Agent': USER_AGENT, 'Accept-Encoding': 'gzip,deflate'})
+    session.headers.update(headers)
+
+    # request session paramaters
+    session.params = params
+
+    try:
+        # request session proxies
+        if sickbeard.PROXY_SETTING:
+            logger.log("Using proxy for url: " + url, logger.DEBUG)
+            session.proxies = {
+                "http": sickbeard.PROXY_SETTING,
+                "https": sickbeard.PROXY_SETTING,
+            }
+
+        resp = session.head(url)
+
+        if not resp.ok:
+            logger.log(u"Requested url " + url + " returned status code is " + str(
+                resp.status_code) + ': ' + codeDescription(resp.status_code), logger.DEBUG)
+            return False
+
+        if proxyGlypeProxySSLwarning is not None:
+            if re.search('The site you are attempting to browse is on a secure connection', resp.text):
+                resp = session.get(proxyGlypeProxySSLwarning)
+
+                if not resp.ok:
+                    logger.log(u"GlypeProxySSLwarning: Requested headURL " + url + " returned status code is " + str(
+                        resp.status_code) + ': ' + codeDescription(resp.status_code), logger.DEBUG)
+                    return False
+
+        return resp.status_code == 200
+
+    except requests.exceptions.HTTPError, e:
+        logger.log(u"HTTP error " + str(e.errno) + " in headURL " + url, logger.WARNING)
+    except requests.exceptions.ConnectionError, e:
+        logger.log(u"Connection error " + str(e.message) + " in headURL " + url, logger.WARNING)
+    except requests.exceptions.Timeout, e:
+        logger.log(u"Connection timed out " + str(e.message) + " in headURL " + url, logger.WARNING)
+    except Exception:
+        logger.log(u"Unknown exception in headURL " + url + ": " + traceback.format_exc(), logger.WARNING)
+
+    return False
+
+def getURL(url, post_data=None, params={}, headers={}, timeout=30, session=None, json=False, proxyGlypeProxySSLwarning=None):
     """
     Returns a byte-string retrieved from the url provider.
     """
@@ -1295,7 +1351,7 @@ def getURL(url, post_data=None, params=None, headers={}, timeout=30, session=Non
     session.headers.update(headers)
 
     # request session ssl verify
-    session.verify = False
+    session.verify = certifi.where()
 
     # request session paramaters
     session.params = params
@@ -1353,7 +1409,7 @@ def download_file(url, filename, session=None):
     session.headers.update({'User-Agent': USER_AGENT, 'Accept-Encoding': 'gzip,deflate'})
 
     # request session ssl verify
-    session.verify = False
+    session.verify = certifi.where()
 
     # request session streaming
     session.stream = True
@@ -1374,13 +1430,17 @@ def download_file(url, filename, session=None):
                 resp.status_code) + ': ' + codeDescription(resp.status_code), logger.DEBUG)
             return False
 
-        with open(filename, 'wb') as fp:
-            for chunk in resp.iter_content(chunk_size=1024):
-                if chunk:
-                    fp.write(chunk)
-                    fp.flush()
+        try:
+            with open(filename, 'wb') as fp:
+                for chunk in resp.iter_content(chunk_size=1024):
+                    if chunk:
+                        fp.write(chunk)
+                        fp.flush()
 
-        chmodAsParent(filename)
+            chmodAsParent(filename)
+        except:
+            logger.log(u"Problem setting permissions or writing file to: %s" % filename, logger.WARNING)
+
     except requests.exceptions.HTTPError, e:
         _remove_file_failed(filename)
         logger.log(u"HTTP error " + str(e.errno) + " while loading URL " + url, logger.WARNING)

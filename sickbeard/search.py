@@ -130,6 +130,9 @@ def snatchEpisode(result, endStatus=SNATCHED):
         if sickbeard.TORRENT_METHOD == "blackhole":
             dlResult = _downloadResult(result)
         else:
+            if not result.content and not result.url.startswith('magnet'):
+                result.content = result.provider.getURL(result.url)
+
             if result.content or result.url.startswith('magnet'):
                 client = clients.getClientIstance(sickbeard.TORRENT_METHOD)()
                 dlResult = client.sendTORRENT(result)
@@ -199,10 +202,6 @@ def pickBestResult(results, show):
         if show and cur_result.show is not show:
             continue
 
-        if not cur_result.url.startswith('magnet'):
-            cur_result.content = cur_result.provider.getURL(cur_result.url)
-            if not cur_result.content:
-                continue
 
         # build the black And white list
         if show.is_anime:
@@ -236,6 +235,13 @@ def pickBestResult(results, show):
             if sickbeard.USE_FAILED_DOWNLOADS and failed_history.hasFailed(cur_result.name, cur_result.size,
                                                                            cur_result.provider.name):
                 logger.log(cur_result.name + u" has previously failed, rejecting it")
+                continue
+
+        # Only request HEAD instead of downloading content here, and only after all other checks but before bestresult!
+        # Otherwise we are spamming providers even when searching with cache only. We can validate now, and download later
+        if len(cur_result.url) and cur_result.provider:
+            cur_result.url = cur_result.provider.headURL(cur_result)
+            if not len(cur_result.url):
                 continue
 
         if cur_result.quality in bestQualities and (not bestResult or bestResult.quality < cur_result.quality or bestResult not in bestQualities):
@@ -380,7 +386,17 @@ def searchForNeededEpisodes():
 
     for curProvider in providers:
         threading.currentThread().name = origThreadName + " :: [" + curProvider.name + "]"
-        curFoundResults = curProvider.searchRSS(episodes)
+        curFoundResults = {}
+        try:
+            curFoundResults = curProvider.searchRSS(episodes)
+        except exceptions.AuthException, e:
+            logger.log(u"Authentication error: " + ex(e), logger.ERROR)
+            continue
+        except Exception, e:
+            logger.log(u"Error while searching " + curProvider.name + ", skipping: " + ex(e), logger.ERROR)
+            logger.log(traceback.format_exc(), logger.DEBUG)
+            continue
+
         didSearch = True
 
         # pick a single result for each episode, respecting existing results
@@ -642,6 +658,7 @@ def searchProviders(show, episodes, manualSearch=False, downCurQuality=False):
                 for epObj in multiResult.episodes:
                     if not multiResult.url.startswith('magnet'):
                         multiResult.content = multiResult.provider.getURL(cur_result.url)
+
                     multiResults[epObj.episode] = multiResult
 
                 # don't bother with the single result if we're going to get it with a multi result
