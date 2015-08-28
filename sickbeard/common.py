@@ -22,8 +22,29 @@ import platform
 import re
 import uuid
 
+from random import shuffle
+
+SPOOF_USER_AGENT = False
+
+# If some provider has an issue with functionality of SR, other than user agents, it's best to come talk to us rather than block.
+# It is no different than us going to a provider if we have questions or issues. Be a team player here.
+# This is disabled, was only added for testing, and has no config.ini or web ui setting. To enable, set SPOOF_USER_AGENT = True
+user_agents = ['Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2228.0 Safari/537.36'
+               'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/41.0.2227.1 Safari/537.36'
+               'Mozilla/5.0 (Windows NT 6.3; rv:36.0) Gecko/20100101 Firefox/36.0'
+               'Mozilla/5.0 (X11; Linux i586; rv:31.0) Gecko/20100101 Firefox/31.0'
+               'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_3) AppleWebKit/537.75.14 (KHTML, like Gecko) Version/7.0.3 Safari/7046A194A'
+               'Mozilla/5.0 (iPad; CPU OS 6_0 like Mac OS X) AppleWebKit/536.26 (KHTML, like Gecko) Version/6.0 Mobile/10A5355d Safari/8536.25'
+               'Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; AS; rv:11.0) like Gecko'
+               'Mozilla/5.0 (compatible, MSIE 11, Windows NT 6.3; Trident/7.0; rv:11.0) like Gecko'
+              ]
+
 INSTANCE_ID = str(uuid.uuid1())
 USER_AGENT = ('SickRage/(' + platform.system() + '; ' + platform.release() + '; ' + INSTANCE_ID + ')')
+
+if SPOOF_USER_AGENT:
+    shuffle(user_agents)
+    USER_AGENT = user_agents[0]
 
 mediaExtensions = ['avi', 'mkv', 'mpg', 'mpeg', 'wmv',
                    'ogm', 'mp4', 'iso', 'img', 'divx',
@@ -94,7 +115,7 @@ class Quality:
     RAWHDTV = 1 << 3  # 8  -- 720p/1080i mpeg2 (trollhd releases)
     FULLHDTV = 1 << 4  # 16 -- 1080p HDTV (QCF releases)
     HDWEBDL = 1 << 5  # 32
-    FULLHDWEBDL = 1 << 6  # 64 -- 1080p web-dl                        
+    FULLHDWEBDL = 1 << 6  # 64 -- 1080p web-dl
     HDBLURAY = 1 << 7  # 128
     FULLHDBLURAY = 1 << 8  # 256
 
@@ -117,8 +138,8 @@ class Quality:
                       SNATCHED: "Snatched",
                       SNATCHED_PROPER: "Snatched (Proper)",
                       FAILED: "Failed",
-                      SNATCHED_BEST: "Snatched (Best)"}
-
+                      SNATCHED_BEST: "Snatched (Best)",
+                      ARCHIVED: "Archived"}
     @staticmethod
     def _getStatusStrings(status):
         toReturn = {}
@@ -178,7 +199,7 @@ class Quality:
     @staticmethod
     def sceneQuality(name, anime=False):
         """
-        Return The quality from the scene episode File 
+        Return The quality from the scene episode File
         """
         if not name:
             return Quality.UNKNOWN
@@ -238,12 +259,65 @@ class Quality:
 
     @staticmethod
     def assumeQuality(name):
+        quality = Quality.qualityFromFileMeta(name)
+        if quality != Quality.UNKNOWN:
+            return quality
+
         if name.lower().endswith((".avi", ".mp4")):
             return Quality.SDTV
         elif name.lower().endswith(".ts"):
             return Quality.RAWHDTV
         else:
             return Quality.UNKNOWN
+
+    @staticmethod
+    def qualityFromFileMeta(filename):
+        from hachoir_parser import createParser
+        from hachoir_metadata import extractMetadata
+
+        try:
+            parser = createParser(filename)
+        except Exception:
+            parser = None
+            pass
+
+        if not parser:
+            return Quality.UNKNOWN
+
+        try:
+            metadata = extractMetadata(parser)
+        except Exception:
+            metadata = None
+            pass
+
+        del parser
+
+        if not metadata:
+            return Quality.UNKNOWN
+
+        height = 0
+        if metadata.has('height'):
+            height = int(metadata.get('height') or 0)
+        else:
+            test = getattr(metadata, "iterGroups", None)
+            if callable(test):
+                for metagroup in metadata.iterGroups():
+                    if metagroup.has('height'):
+                        height = int(metagroup.get('height') or 0)
+
+        del metadata
+
+        if not height:
+            return Quality.UNKNOWN
+
+        if height > 1040:
+            return Quality.FULLHDTV
+        elif height > 680 and height < 760:
+            return Quality.HDTV
+        elif height < 680:
+            return Quality.SDTV
+
+        return Quality.UNKNOWN
 
     @staticmethod
     def compositeStatus(status, quality):
@@ -277,13 +351,14 @@ class Quality:
     SNATCHED_PROPER = None
     FAILED = None
     SNATCHED_BEST = None
-
+    ARCHIVED = None
 
 Quality.DOWNLOADED = [Quality.compositeStatus(DOWNLOADED, x) for x in Quality.qualityStrings.keys()]
 Quality.SNATCHED = [Quality.compositeStatus(SNATCHED, x) for x in Quality.qualityStrings.keys()]
 Quality.SNATCHED_PROPER = [Quality.compositeStatus(SNATCHED_PROPER, x) for x in Quality.qualityStrings.keys()]
 Quality.FAILED = [Quality.compositeStatus(FAILED, x) for x in Quality.qualityStrings.keys()]
 Quality.SNATCHED_BEST = [Quality.compositeStatus(SNATCHED_BEST, x) for x in Quality.qualityStrings.keys()]
+Quality.ARCHIVED = [Quality.compositeStatus(ARCHIVED, x) for x in Quality.qualityStrings.keys()]
 
 SD = Quality.combineQualities([Quality.SDTV, Quality.SDDVD], [])
 HD = Quality.combineQualities(
@@ -295,7 +370,7 @@ ANY = Quality.combineQualities(
     [Quality.SDTV, Quality.SDDVD, Quality.HDTV, Quality.FULLHDTV, Quality.HDWEBDL, Quality.FULLHDWEBDL,
      Quality.HDBLURAY, Quality.FULLHDBLURAY, Quality.UNKNOWN], [])  # SD + HD
 
-# legacy template, cant remove due to reference in mainDB upgrade?                                                                                                                                        
+# legacy template, cant remove due to reference in mainDB upgrade?
 BEST = Quality.combineQualities([Quality.SDTV, Quality.HDTV, Quality.HDWEBDL], [Quality.HDTV])
 
 qualityPresets = (SD, HD, HD720p, HD1080p, ANY)
@@ -363,4 +438,3 @@ countryList = {'Australia': 'AU',
                'Canada': 'CA',
                'USA': 'US'
 }
-

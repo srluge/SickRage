@@ -137,7 +137,7 @@ def snatchEpisode(result, endStatus=SNATCHED):
                 client = clients.getClientIstance(sickbeard.TORRENT_METHOD)()
                 dlResult = client.sendTORRENT(result)
             else:
-                logger.log(u"Torrent file content is empty", logger.ERROR)
+                logger.log(u"Torrent file content is empty", logger.WARNING)
                 dlResult = False
     else:
         logger.log(u"Unknown result type, unable to download it", logger.ERROR)
@@ -180,12 +180,6 @@ def snatchEpisode(result, endStatus=SNATCHED):
     if len(sql_l) > 0:
         myDB = db.DBConnection()
         myDB.mass_action(sql_l)
-
-    if sickbeard.UPDATE_SHOWS_ON_SNATCH and not sickbeard.showQueueScheduler.action.isBeingUpdated(result.show) and result.show.status == "Continuing":
-        try:
-            sickbeard.showQueueScheduler.action.updateShow(result.show, True)
-        except exceptions.CantUpdateException as e:
-            logger.log("Unable to update show: {0}".format(str(e)),logger.DEBUG)
 
     return True
 
@@ -237,18 +231,13 @@ def pickBestResult(results, show):
                 logger.log(cur_result.name + u" has previously failed, rejecting it")
                 continue
 
-        # Only request HEAD instead of downloading content here, and only after all other checks but before bestresult!
-        # Otherwise we are spamming providers even when searching with cache only. We can validate now, and download later
-        if len(cur_result.url) and cur_result.provider:
-            cur_result.url = cur_result.provider.headURL(cur_result)
-            if not len(cur_result.url):
-                continue
-
-        if cur_result.quality in bestQualities and (not bestResult or bestResult.quality < cur_result.quality or bestResult not in bestQualities):
+        if not bestResult:
             bestResult = cur_result
-        elif cur_result.quality in anyQualities and (not bestResult or bestResult not in bestQualities) and (not bestResult or bestResult.quality < cur_result.quality):
+        elif cur_result.quality in bestQualities and (bestResult.quality < cur_result.quality or bestResult not in bestQualities):
             bestResult = cur_result
-        elif bestResult and bestResult.quality == cur_result.quality:
+        elif cur_result.quality in anyQualities and bestResult not in bestQualities and bestResult.quality < cur_result.quality:
+            bestResult = cur_result
+        elif bestResult.quality == cur_result.quality:
             if "proper" in cur_result.name.lower() or "repack" in cur_result.name.lower():
                 bestResult = cur_result
             elif "internal" in bestResult.name.lower() and "internal" not in cur_result.name.lower():
@@ -320,19 +309,14 @@ def isFirstBestMatch(result):
     return False
 
 def wantedEpisodes(show, fromDate):
+
     anyQualities, bestQualities = common.Quality.splitQuality(show.quality) # @UnusedVariable
     allQualities = list(set(anyQualities + bestQualities))
 
     logger.log(u"Seeing if we need anything from " + show.name, logger.DEBUG)
     myDB = db.DBConnection()
 
-    if show.air_by_date:
-        sqlResults = myDB.select(
-            "SELECT ep.status, ep.season, ep.episode FROM tv_episodes ep, tv_shows show WHERE season != 0 AND ep.showid = show.indexer_id AND show.paused = 0 AND ep.airdate > ? AND ep.showid = ? AND show.air_by_date = 1",
-        [fromDate.toordinal(), show.indexerid])
-    else:
-        sqlResults = myDB.select(
-            "SELECT status, season, episode FROM tv_episodes WHERE showid = ? AND season > 0 and airdate > ?",
+    sqlResults = myDB.select("SELECT status, season, episode FROM tv_episodes WHERE showid = ? AND season > 0 and airdate > ?",
             [show.indexerid, fromDate.toordinal()])
 
     # check through the list of statuses to see if we want any
@@ -347,9 +331,7 @@ def wantedEpisodes(show, fromDate):
             highestBestQuality = 0
 
         # if we need a better one then say yes
-        if (curStatus in (common.DOWNLOADED, common.SNATCHED, common.SNATCHED_PROPER,
-            common.SNATCHED_BEST) and curQuality < highestBestQuality) or curStatus == common.WANTED:
-
+        if (curStatus in (common.DOWNLOADED, common.SNATCHED, common.SNATCHED_PROPER) and curQuality < highestBestQuality) or curStatus == common.WANTED:
             epObj = show.getEpisode(int(result["season"]), int(result["episode"]))
             epObj.wantedQuality = [i for i in allQualities if (i > curQuality and i != common.Quality.UNKNOWN)]
             wanted.append(epObj)
@@ -401,6 +383,10 @@ def searchForNeededEpisodes():
 
         # pick a single result for each episode, respecting existing results
         for curEp in curFoundResults:
+            if not curEp.show or curEp.show.paused:
+                logger.log(u"Skipping %s because the show is paused " % curEp.prettyName(), logger.DEBUG)
+                continue
+
             bestResult = pickBestResult(curFoundResults[curEp], curEp.show)
 
             # if all results were rejected move on to the next episode
@@ -461,8 +447,8 @@ def searchProviders(show, episodes, manualSearch=False, downCurQuality=False):
         searchCount = 0
         search_mode = curProvider.search_mode
 
-        # Always search for episode when manually searching when in sponly and fallback false
-        if search_mode == 'sponly' and manualSearch == True and curProvider.search_fallback == False:
+        # Always search for episode when manually searching when in sponly
+        if search_mode == 'sponly' and manualSearch == True:
             search_mode = 'eponly'
 
         while(True):
@@ -482,8 +468,6 @@ def searchProviders(show, episodes, manualSearch=False, downCurQuality=False):
                 logger.log(u"Error while searching " + curProvider.name + ", skipping: " + ex(e), logger.ERROR)
                 logger.log(traceback.format_exc(), logger.DEBUG)
                 break
-            finally:
-                threading.currentThread().name = origThreadName
 
             didSearch = True
 
@@ -500,10 +484,10 @@ def searchProviders(show, episodes, manualSearch=False, downCurQuality=False):
                 break
 
             if search_mode == 'sponly':
-                logger.log(u"FALLBACK EPISODE SEARCH INITIATED ...", logger.DEBUG)
+                logger.log(u"Fallback episode search initiated", logger.DEBUG)
                 search_mode = 'eponly'
             else:
-                logger.log(u"FALLBACK SEASON PACK SEARCH INITIATED ...", logger.DEBUG)
+                logger.log(u"Fallback season pack search initiate", logger.DEBUG)
                 search_mode = 'sponly'
 
         # skip to next provider if we have no results to process
@@ -597,40 +581,38 @@ def searchProviders(show, episodes, manualSearch=False, downCurQuality=False):
                             epObjs.append(show.getEpisode(season, curEpNum))
                     bestSeasonResult.episodes = epObjs
 
-                    epNum = MULTI_EP_RESULT
-                    if epNum in foundResults[curProvider.name]:
-                        foundResults[curProvider.name][epNum].append(bestSeasonResult)
+                    if MULTI_EP_RESULT in foundResults[curProvider.name]:
+                        foundResults[curProvider.name][MULTI_EP_RESULT].append(bestSeasonResult)
                     else:
-                        foundResults[curProvider.name][epNum] = [bestSeasonResult]
+                        foundResults[curProvider.name][MULTI_EP_RESULT] = [bestSeasonResult]
 
         # go through multi-ep results and see if we really want them or not, get rid of the rest
         multiResults = {}
         if MULTI_EP_RESULT in foundResults[curProvider.name]:
-            for multiResult in foundResults[curProvider.name][MULTI_EP_RESULT]:
+            for _multiResult in foundResults[curProvider.name][MULTI_EP_RESULT]:
 
-                logger.log(u"Seeing if we want to bother with multi-episode result " + multiResult.name, logger.DEBUG)
+                logger.log(u"Seeing if we want to bother with multi-episode result " + _multiResult.name, logger.DEBUG)
 
-                if sickbeard.USE_FAILED_DOWNLOADS and failed_history.hasFailed(multiResult.name, multiResult.size,
-                                                                               multiResult.provider.name):
-                    logger.log(multiResult.name + u" has previously failed, rejecting this multi-ep result")
+		# Filter result by ignore/required/whitelist/blacklist/quality, etc
+                multiResult = pickBestResult(_multiResult, show)
+                if not multiResult:
                     continue
 
                 # see how many of the eps that this result covers aren't covered by single results
                 neededEps = []
                 notNeededEps = []
                 for epObj in multiResult.episodes:
-                    epNum = epObj.episode
                     # if we have results for the episode
-                    if epNum in foundResults[curProvider.name] and len(foundResults[curProvider.name][epNum]) > 0:
-                        neededEps.append(epNum)
+                    if epObj.episode in foundResults[curProvider.name] and len(foundResults[curProvider.name][epObj.episode]) > 0:
+                        notNeededEps.append(epObj.episode)
                     else:
-                        notNeededEps.append(epNum)
+                        neededEps.append(epObj.episode)
 
                 logger.log(
                     u"Single-ep check result is neededEps: " + str(neededEps) + ", notNeededEps: " + str(notNeededEps),
                     logger.DEBUG)
 
-                if not notNeededEps:
+                if not neededEps:
                     logger.log(u"All of these episodes were covered by single episode results, ignoring this multi-episode result", logger.DEBUG)
                     continue
 
@@ -638,11 +620,10 @@ def searchProviders(show, episodes, manualSearch=False, downCurQuality=False):
                 multiNeededEps = []
                 multiNotNeededEps = []
                 for epObj in multiResult.episodes:
-                    epNum = epObj.episode
-                    if epNum in multiResults:
-                        multiNotNeededEps.append(epNum)
+                    if epObj.episode in multiResults:
+                        multiNotNeededEps.append(epObj.episode)
                     else:
-                        multiNeededEps.append(epNum)
+                        multiNeededEps.append(epObj.episode)
 
                 logger.log(
                     u"Multi-ep check result is multiNeededEps: " + str(multiNeededEps) + ", multiNotNeededEps: " + str(
@@ -654,21 +635,14 @@ def searchProviders(show, episodes, manualSearch=False, downCurQuality=False):
                         logger.DEBUG)
                     continue
 
-                # if we're keeping this multi-result then remember it
-                for epObj in multiResult.episodes:
-                    if not multiResult.url.startswith('magnet'):
-                        multiResult.content = multiResult.provider.getURL(cur_result.url)
-
-                    multiResults[epObj.episode] = multiResult
-
                 # don't bother with the single result if we're going to get it with a multi result
                 for epObj in multiResult.episodes:
-                    epNum = epObj.episode
-                    if epNum in foundResults[curProvider.name]:
+                    multiResults[epObj.episode] = multiResult
+                    if epObj.episode in foundResults[curProvider.name]:
                         logger.log(
                             u"A needed multi-episode result overlaps with a single-episode result for ep #" + str(
-                                epNum) + ", removing the single-episode results from the list", logger.DEBUG)
-                        del foundResults[curProvider.name][epNum]
+                                epObj.episode) + ", removing the single-episode results from the list", logger.DEBUG)
+                        del foundResults[curProvider.name][epObj.episode]
 
         # of all the single ep results narrow it down to the best one for each episode
         finalResults += set(multiResults.values())

@@ -10,7 +10,7 @@ sys.path.append(os.path.join( sickbeardPath, 'lib'))
 sys.path.append(sickbeardPath)
 configFilename = os.path.join(sickbeardPath, "config.ini")
 
-from lib import requests
+import requests
 
 config = ConfigParser.ConfigParser()
 
@@ -76,6 +76,19 @@ def deluge():
     dirName = sys.argv[3]
     nzbName = sys.argv[2]
     
+    return (dirName, nzbName)
+
+def deluged() :
+
+    if len(sys.argv) < 4:
+        scriptlogger.error('No folder supplied - is this being called from Deluge?')
+        print "No folder supplied - is this being called from Deluge?"
+        time.sleep(3)
+        sys.exit()
+
+    dirName = sys.argv[3]
+    nzbName = sys.argv[2]
+
     return (dirName, nzbName)
 
 def blackhole():
@@ -150,7 +163,7 @@ def main():
         time.sleep(3)
         sys.exit()
         
-    if not torrent_method in ['utorrent', 'transmission', 'deluge', 'blackhole']:
+    if not torrent_method in ['utorrent', 'transmission', 'deluge', 'deluged', 'blackhole']:
         scriptlogger.error(u'Unknown Torrent Method. Aborting!')
         print u'Unknown Torrent Method. Aborting!'
         time.sleep(3)

@@ -29,8 +29,8 @@ from sickbeard import helpers
 from sickbeard import show_name_helpers
 from sickbeard.exceptions import ex
 from sickbeard import clients
-from lib import requests
-from lib.requests import exceptions
+import requests
+from requests import exceptions
 from sickbeard.helpers import sanitizeSceneName
 
 
@@ -122,7 +122,7 @@ class TorrentDayProvider(generic.TorrentProvider):
             except:
                 pass
 
-            logger.log(u'Unable to obtain cookie for TorrentDay', logger.ERROR)
+            logger.log(u'Unable to obtain cookie for TorrentDay', logger.WARNING)
             return False
 
 
