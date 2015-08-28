@@ -20,6 +20,8 @@
 
     sql_statement += '(SELECT COUNT(*) FROM tv_episodes WHERE showid=tv_eps.showid AND season > 0 AND episode > 0 AND airdate > 1 AND status IN ' + status_quality + ') AS ep_snatched, '
     sql_statement += '(SELECT COUNT(*) FROM tv_episodes WHERE showid=tv_eps.showid AND season > 0 AND episode > 0 AND airdate > 1 AND status IN ' + status_download + ') AS ep_downloaded, '
+    sql_statement += '(SELECT COUNT(*) FROM tv_episodes WHERE showid=tv_eps.showid AND season > 0 AND episode > 0 AND airdate > 1 AND status = ' + str(WANTED) + ') AS ep_wanted, '
+    sql_statement += '(SELECT COUNT(*) FROM tv_episodes WHERE showid=tv_eps.showid AND season > 0 AND episode > 0 AND airdate > 1 AND status = ' + str(FAILED) + ') AS ep_failed, '
     sql_statement += '(SELECT COUNT(*) FROM tv_episodes WHERE showid=tv_eps.showid AND season > 0 AND episode > 0 AND airdate > 1 '
     sql_statement += ' AND ((airdate <= ' + today + ' AND (status = ' + str(SKIPPED) + ' OR status = ' + str(WANTED) + ' OR status = ' + str(FAILED) + ')) '
     sql_statement += ' OR (status IN ' + status_quality + ') OR (status IN ' + status_download + '))) AS ep_total, '
@@ -674,6 +676,8 @@ $(document).ready(function(){
     cur_snatched = 0
     cur_downloaded = 0
     cur_total = 0
+    cur_wanted = 0
+    cur_failed = 0
     download_stat_tip = ''
 
     if curShow.indexerid in show_stat:
@@ -688,6 +692,14 @@ $(document).ready(function(){
         if not cur_downloaded:
             cur_downloaded = 0
 
+        cur_wanted = show_stat[curShow.indexerid]['ep_wanted']
+        if not cur_wanted:
+            cur_wanted = 0
+
+        cur_failed = show_stat[curShow.indexerid]['ep_failed']
+        if not cur_failed:
+            cur_failed = 0
+
         cur_total = show_stat[curShow.indexerid]['ep_total']
         if not cur_total:
             cur_total = 0
@@ -698,6 +710,12 @@ $(document).ready(function(){
         if cur_snatched > 0:
             download_stat = download_stat + "+" + str(cur_snatched)
             download_stat_tip = download_stat_tip + "&#013;" + "Snatched: " + str(cur_snatched)
+        if cur_wanted > 0:
+             download_stat = download_stat + "-" + str(cur_wanted)
+             download_stat_tip = download_stat_tip + "&#013;" + "Wanted: " + str(cur_wanted)
+        if cur_failed > 0:
+             download_stat = download_stat + "!" + str(cur_failed)
+             download_stat_tip = download_stat_tip + "&#013;" + "Failed: " + str(cur_failed)
 
         download_stat = download_stat + " / " + str(cur_total)
         download_stat_tip = download_stat_tip + "&#013;" + "Total: " + str(cur_total)
