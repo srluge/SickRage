@@ -19,18 +19,19 @@
 import os
 import traceback
 import datetime
-import json
 
 import sickbeard
-from sickbeard import encodingKludge as ek
-from sickbeard.exceptions import ex
 from sickbeard import logger
 from sickbeard import helpers
 from sickbeard import search_queue
 from sickbeard import db
-from sickbeard import notifiers
-from sickbeard.common import SNATCHED, SNATCHED_PROPER, DOWNLOADED, SKIPPED, UNAIRED, IGNORED, ARCHIVED, WANTED, UNKNOWN, FAILED
-from common import Quality, qualityPresetStrings, statusStrings
+from sickbeard.common import ARCHIVED
+from sickbeard.common import SKIPPED
+from sickbeard.common import UNKNOWN
+from sickbeard.common import WANTED
+from sickrage.helper.encoding import ek
+from sickrage.helper.exceptions import ex
+from common import Quality
 from libtrakt import *
 from libtrakt.exceptions import traktException
 
@@ -70,7 +71,7 @@ class TraktChecker():
         self.amActive = False
 
     def run(self, force=False):
-        
+
         self.amActive = True
 
         # add shows from trakt.tv watchlist
@@ -90,7 +91,7 @@ class TraktChecker():
                 self.syncLibrary()
             except Exception:
                 logger.log(traceback.format_exc(), logger.DEBUG)
-                
+
         self.amActive = False
 
     def findShow(self, indexer, indexerid):
@@ -100,7 +101,7 @@ class TraktChecker():
             library = self.trakt_api.traktRequest("sync/collection/shows") or []
 
             if not library:
-                logger.log(u"Could not connect to trakt service, aborting library check", logger.ERROR)
+                logger.log(u"Could not connect to trakt service, aborting library check", logger.WARNING)
                 return
 
             if not len(library):
@@ -137,7 +138,6 @@ class TraktChecker():
                 self.trakt_api.traktRequest("sync/collection/remove", data, method='POST')
             except traktException as e:
                 logger.log(u"Could not connect to Trakt service: %s" % ex(e), logger.WARNING)
-                pass
 
     def addShowToTraktLibrary(self, show_obj):
         """
@@ -320,7 +320,7 @@ class TraktChecker():
         if sickbeard.TRAKT_SYNC_WATCHLIST and sickbeard.USE_TRAKT and sickbeard.TRAKT_REMOVE_SHOW_FROM_SICKRAGE:
             logger.log(u"SHOW_SICKRAGE::REMOVE::START - Look for Shows to remove from SickRage", logger.DEBUG)
 
-            if sickbeard.showList is not None:
+            if sickbeard.showList:
                 for show in sickbeard.showList:
                     if show.status == "Ended":
                         try:
@@ -330,7 +330,7 @@ class TraktChecker():
                             return
 
                         if 'aired' in progress and 'completed' in progress and progress['aired'] == progress['completed']:
-                            show.deleteShow(full=True)
+                            sickbeard.showQueueScheduler.action.removeShow(show, full=True)
                             logger.log(u"Show: " + show.name + " has been removed from SickRage", logger.DEBUG)
 
             logger.log(u"SHOW_SICKRAGE::REMOVE::FINISH - Trakt Show Watchlist", logger.DEBUG)
@@ -417,7 +417,7 @@ class TraktChecker():
                 location = None
 
             if location:
-                showPath = ek.ek(os.path.join, location, helpers.sanitizeFileName(name))
+                showPath = ek(os.path.join, location, helpers.sanitizeFileName(name))
                 dir_exists = helpers.makeDir(showPath)
                 if not dir_exists:
                     logger.log(u"Unable to create the folder " + showPath + ", can't add the show", logger.ERROR)
@@ -425,10 +425,13 @@ class TraktChecker():
                 else:
                     helpers.chmodAsParent(showPath)
 
-                sickbeard.showQueueScheduler.action.addShow(int(indexer), int(indexer_id), showPath, status,
-                                                            int(sickbeard.QUALITY_DEFAULT),
-                                                            int(sickbeard.FLATTEN_FOLDERS_DEFAULT),
-                                                            paused=sickbeard.TRAKT_START_PAUSED)
+                sickbeard.showQueueScheduler.action.addShow(int(indexer), int(indexer_id), showPath,
+                                                            default_status=status,
+                                                            quality=int(sickbeard.QUALITY_DEFAULT),
+                                                            flatten_folders=int(sickbeard.FLATTEN_FOLDERS_DEFAULT),
+                                                            paused=sickbeard.TRAKT_START_PAUSED,
+                                                            default_status_after=status,
+                                                            archive=sickbeard.ARCHIVE_DEFAULT)
             else:
                 logger.log(u"There was an error creating the show, no root directory setting found", logger.ERROR)
                 return

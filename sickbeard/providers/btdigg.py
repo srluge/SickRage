@@ -21,15 +21,13 @@
 import datetime
 import generic
 
-from sickbeard.common import Quality
 from sickbeard import logger
 from sickbeard import tvcache
-from sickbeard import helpers
 from sickbeard import show_name_helpers
 from sickbeard import db
 from sickbeard.common import WANTED
-from sickbeard.exceptions import ex
 from sickbeard.config import naming_ep_type
+from sickbeard.helpers import sanitizeSceneName
 
 class BTDIGGProvider(generic.TorrentProvider):
 
@@ -37,8 +35,13 @@ class BTDIGGProvider(generic.TorrentProvider):
         generic.TorrentProvider.__init__(self, "BTDigg")
 
         self.supportsBacklog = True
-        self.url = 'https://api.btdigg.org/'
-
+        self.public = True
+        
+        self.urls = {'url': u'https://btdigg.org/',
+                     'api': u'https://api.btdigg.org/',
+                     }
+        self.url = self.urls['url']
+        
         self.cache = BTDiggCache(self)
 
     def isEnabled(self):
@@ -78,10 +81,10 @@ class BTDIGGProvider(generic.TorrentProvider):
         for sqlEp in sqlResults:
             for show_name in set(show_name_helpers.allPossibleShowNames(show)):
                 if show.air_by_date:
-                    ep_string = show_name_helpers.sanitizeSceneName(show_name) +' '+ str(datetime.date.fromordinal(sqlEp["airdate"])).replace('-', '.')
+                    ep_string = sanitizeSceneName(show_name) +' '+ str(datetime.date.fromordinal(sqlEp["airdate"])).replace('-', '.')
                     search_string.append(ep_string)
                 else:
-                    ep_string = show_name_helpers.sanitizeSceneName(show_name) + ' S%02d' % sqlEp["season"]
+                    ep_string = sanitizeSceneName(show_name) + ' S%02d' % sqlEp["season"]
                     search_string.append(ep_string)
 
         return search_string
@@ -95,7 +98,7 @@ class BTDIGGProvider(generic.TorrentProvider):
         search_string = []
 
         for show_name in set(show_name_helpers.allPossibleShowNames(ep_obj.show)):
-            ep_string = show_name_helpers.sanitizeSceneName(show_name)
+            ep_string = sanitizeSceneName(show_name)
             if ep_obj.show.air_by_date:
                 ep_string += ' ' + str(ep_obj.airdate).replace('-', '.')
             else:
@@ -132,7 +135,7 @@ class BTDIGGProvider(generic.TorrentProvider):
         logger.log("Performing Search: {0}".format(search_params))
 
         # TODO: Make order configurable. 0: weight, 1: req, 2: added, 3: size, 4: files, 5
-        searchUrl = self.url + "api/private-341ada3245790954/s02?q=" + search_params + "&p=0&order=1"
+        searchUrl = self.urls['api'] + "api/private-341ada3245790954/s02?q=" + search_params + "&p=0&order=1"
 
         jdata = self.getURL(searchUrl, json=True)
         if not jdata:

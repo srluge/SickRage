@@ -1,9 +1,9 @@
 # Author: Paul Wollaston
+# Contributions: Luke Mullan
 #
 # This client script allows connection to Deluge Daemon directly, completely
 # circumventing the requirement to use the WebUI.
 
-import json
 from base64 import b64encode
 
 import sickbeard
@@ -41,7 +41,7 @@ class DelugeDAPI(GenericClient):
             'add_paused': sickbeard.TORRENT_PAUSED
         }
 
-        remote_torrent = self.drpc.add_torrent_magnet(result.url, options)
+        remote_torrent = self.drpc.add_torrent_magnet(result.url, options, result.hash)
 
         if not remote_torrent:
             return None
@@ -64,7 +64,7 @@ class DelugeDAPI(GenericClient):
             'add_paused': sickbeard.TORRENT_PAUSED
         }
 
-        remote_torrent = self.drpc.add_torrent_file(result.name + '.torrent', result.content, options)
+        remote_torrent = self.drpc.add_torrent_file(result.name + '.torrent', result.content, options, result.hash)
 
         if not remote_torrent:
             return None
@@ -83,22 +83,27 @@ class DelugeDAPI(GenericClient):
             return False
 
         if label:
-            if self.drpc.set_torrent_label(result.hash, label):
-                return True
+            return self.drpc.set_torrent_label(result.hash, label)
+        return True
 
-        return False
 
     def _set_torrent_ratio(self, result):
+        if result.ratio:
+            ratio = float(result.ratio)
+            return self.drpc.set_torrent_ratio(result.hash, ratio)
+        return True
 
+    def _set_torrent_priority(self, result):
+        if result.priority == 1:
+            return self.drpc.set_torrent_priority(result.hash, True)
         return True
 
     def _set_torrent_path(self, result):
 
         path = sickbeard.TORRENT_PATH
         if path:
-            if self.drpc.set_torrent_path(result.hash, path):
-                return True
-        return False
+            return self.drpc.set_torrent_path(result.hash, path)
+        return True
 
     def _set_torrent_pause(self, result):
 
@@ -107,7 +112,6 @@ class DelugeDAPI(GenericClient):
         return True
 
     def testAuthentication(self):
-        print "Test Auth"
         if self.connect(True) and self.drpc.test():
             return True, 'Success: Connected and Authenticated'
         else:
@@ -140,15 +144,14 @@ class DelugeRPC(object):
             return False
         return True
 
-    def add_torrent_magnet(self, torrent, options):
+    def add_torrent_magnet(self, torrent, options, torrent_hash):
         torrent_id = False
         try:
             self.connect()
             torrent_id = self.client.core.add_torrent_magnet(torrent, options).get()
             if not torrent_id:
-                torrent_id = self._check_torrent(True, torrent)
+                torrent_id = self._check_torrent(torrent_hash)
         except Exception as err:
-            print "ERRERR: %s" % err
             return False
         finally:
             if self.client:
@@ -156,13 +159,13 @@ class DelugeRPC(object):
 
         return torrent_id
 
-    def add_torrent_file(self, filename, torrent, options):
+    def add_torrent_file(self, filename, torrent, options, torrent_hash):
         torrent_id = False
         try:
             self.connect()
             torrent_id = self.client.core.add_torrent_file(filename, b64encode(torrent), options).get()
             if not torrent_id:
-                torrent_id = self._check_torrent(False, torrent)
+                torrent_id = self._check_torrent(torrent_hash)
         except Exception as err:
             return False
         finally:
@@ -176,7 +179,6 @@ class DelugeRPC(object):
             self.connect()
             self.client.label.set_torrent(torrent_id, label).get()
         except Exception as err:
-            logger.log('DelugeD: Failed to set label for torrent: ' + err + ' ' + traceback.format_exc(), logger.ERROR)
             return False
         finally:
             if self.client:
@@ -189,7 +191,30 @@ class DelugeRPC(object):
             self.client.core.set_torrent_move_completed_path(torrent_id, path).get()
             self.client.core.set_torrent_move_completed(torrent_id, 1).get()
         except Exception as err:
-            logger.log('DelugeD: Failed to set path for torrent: ' + err + ' ' + traceback.format_exc(), logger.ERROR)
+            return False
+        finally:
+            if self.client:
+                self.disconnect()
+        return True
+
+    def set_torrent_priority(self, torrent_ids, priority):
+        try:
+            self.connect()
+            if priority:
+                self.client.core.queue_top([torrent_ids]).get()
+        except Exception, err:
+            return False
+        finally:
+            if self.client:
+                self.disconnect()
+        return True
+
+    def set_torrent_ratio(self, torrent_ids, ratio):
+        try:
+            self.connect()
+            self.client.core.set_torrent_stop_at_ratio(torrent_ids, True).get()
+            self.client.core.set_torrent_stop_ratio(torrent_ids, ratio).get()
+        except Exception, err:
             return False
         finally:
             if self.client:
@@ -201,7 +226,6 @@ class DelugeRPC(object):
             self.connect()
             self.client.core.pause_torrent(torrent_ids).get()
         except Exception as err:
-            logger.log('DelugeD: Failed to pause torrent: ' + err + ' ' + traceback.format_exc(), logger.ERROR)
             return False
         finally:
             if self.client:
@@ -211,23 +235,11 @@ class DelugeRPC(object):
     def disconnect(self):
         self.client.disconnect()
 
-    def _check_torrent(self, magnet, torrent):
-        # Torrent not added, check if it already existed.
-        if magnet:
-            torrent_hash = re.findall('urn:btih:([\w]{32,40})', torrent)[0]
-        else:
-            info = bdecode(torrent)["info"]
-            torrent_hash = sha1(benc(info)).hexdigest()
-
-        # Convert base 32 to hex
-        if len(torrent_hash) == 32:
-            torrent_hash = b16encode(b32decode(torrent_hash))
-
-        torrent_hash = torrent_hash.lower()
-        torrent_check = self.client.core.get_torrent_status(torrent_hash, {}).get()
-        if torrent_check['hash']:
+    def _check_torrent(self, torrent_hash):
+        torrent_id = self.client.core.get_torrent_status(torrent_hash, {}).get()
+        if torrent_id['hash']:
+            logger.log('DelugeD: Torrent already exists in Deluge', logger.DEBUG)
             return torrent_hash
-
         return False
 
 api = DelugeDAPI()

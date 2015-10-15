@@ -19,32 +19,31 @@
 
 import urllib
 
-import requests
 import generic
 from sickbeard import logger
 from sickbeard import tvcache
 from sickbeard.helpers import mapIndexersToShow
-from sickbeard.exceptions import AuthException
+from sickrage.helper.exceptions import AuthException
 
 
 class TitansOfTVProvider(generic.TorrentProvider):
     def __init__(self):
         generic.TorrentProvider.__init__(self, 'TitansOfTV')
         self.supportsBacklog = True
+        self.public = False
         self.supportsAbsoluteNumbering = True
         self.api_key = None
         self.ratio = None
         self.cache = TitansOfTVCache(self)
         self.url = 'http://titansof.tv/api/torrents'
         self.download_url = 'http://titansof.tv/api/torrents/%s/download?apikey=%s'
-        self.session = requests.Session()
-        
+
     def isEnabled(self):
         return self.enabled
-        
+
     def imageName(self):
         return 'titansoftv.png'
-        
+
     def seedRatio(self):
         return self.ratio
 

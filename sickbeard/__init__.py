@@ -34,26 +34,34 @@ import sys
 
 from github import Github
 
-from . import providers, metadata, config, webserveInit
-from .providers.generic import GenericProvider
-from .providers import btn, newznab, womble, thepiratebay, torrentleech, kat, iptorrents, \
+from sickbeard import metadata
+from sickbeard import providers
+from sickbeard.providers.generic import GenericProvider
+from sickbeard.providers import btn, newznab, womble, thepiratebay, torrentleech, kat, iptorrents, \
     omgwtfnzbs, scc, hdtorrents, torrentday, hdbits, hounddawgs, nextgen, speedcd, nyaatorrents, animenzb, bluetigers, cpasbien, fnt, xthor, torrentbytes, \
-    frenchtorrentdb, freshontv, titansoftv, libertalia, morethantv, bitsoup, t411, tokyotoshokan, shazbat, rarbg, alpharatio, tntvillage, binsearch, scenetime, btdigg
-from .config import CheckSection, check_setting_int, check_setting_str, check_setting_float, ConfigMigrator, \
+    frenchtorrentdb, freshontv, titansoftv, libertalia, morethantv, bitsoup, t411, tokyotoshokan, shazbat, rarbg, alpharatio, tntvillage, binsearch, torrentproject, extratorrent, \
+    scenetime, btdigg, strike, transmitthenet, tvchaosuk
+from sickbeard.config import CheckSection, check_setting_int, check_setting_str, check_setting_float, ConfigMigrator, \
     naming_ep_type
-from . import searchBacklog, showUpdater, versionChecker, properFinder, autoPostProcesser, \
+from sickbeard import searchBacklog, showUpdater, versionChecker, properFinder, autoPostProcesser, \
     subtitles, traktChecker
-from . import helpers, db, exceptions, show_queue, search_queue, scheduler, show_name_helpers
-from . import logger
-from . import naming
-from . import dailysearcher
-from . import scene_numbering, scene_exceptions, name_cache
-from .indexers.indexer_api import indexerApi
-from .indexers.indexer_exceptions import indexer_shownotfound, indexer_showincomplete, indexer_exception, indexer_error, \
+from sickbeard import db
+from sickbeard import helpers
+from sickbeard import scheduler
+from sickbeard import search_queue
+from sickbeard import show_queue
+from sickbeard import logger
+from sickbeard import naming
+from sickbeard import dailysearcher
+from sickbeard.indexers.indexer_api import indexerApi
+from sickbeard.indexers.indexer_exceptions import indexer_shownotfound, indexer_showincomplete, indexer_exception, indexer_error, \
     indexer_episodenotfound, indexer_attributenotfound, indexer_seasonnotfound, indexer_userabort, indexerExcepts
-from .common import SD, SKIPPED, WANTED, NAMING_REPEAT
-from .databases import mainDB, cache_db, failed_db
-from .helpers import ex
+from sickbeard.common import SD
+from sickbeard.common import SKIPPED
+from sickbeard.common import WANTED
+from sickbeard.databases import mainDB, cache_db, failed_db
+from sickrage.helper.exceptions import ex
+from sickrage.system.Shutdown import Shutdown
 
 from configobj import ConfigObj
 
@@ -128,7 +136,13 @@ GIT_USERNAME = None
 GIT_PASSWORD = None
 GIT_PATH = None
 GIT_AUTOISSUES = False
+GIT_NEWVER = False
 DEVELOPER = False
+
+NEWS_URL = 'http://sickragetv.github.io/sickrage-news/news.md'
+NEWS_LAST_READ = None
+NEWS_LATEST = None
+NEWS_UNREAD = 0
 
 INIT_LOCK = Lock()
 started = False
@@ -203,6 +217,7 @@ INDEXER_DEFAULT = None
 INDEXER_TIMEOUT = None
 SCENE_DEFAULT = False
 ANIME_DEFAULT = False
+ARCHIVE_DEFAULT = False
 PROVIDER_ORDER = []
 
 NAMING_MULTI_EP = False
@@ -425,8 +440,6 @@ SYNOLOGYNOTIFIER_NOTIFY_ONSNATCH = False
 SYNOLOGYNOTIFIER_NOTIFY_ONDOWNLOAD = False
 SYNOLOGYNOTIFIER_NOTIFY_ONSUBTITLEDOWNLOAD = False
 
-USE_IMDB_POPULAR = True
-
 USE_TRAKT = False
 TRAKT_USERNAME = None
 TRAKT_ACCESS_TOKEN = None
@@ -539,8 +552,11 @@ TRAKT_API_URL = 'https://api-v2launch.trakt.tv/'
 
 FANART_API_KEY = '9b3afaf26f6241bdb57d6cc6bd798da7'
 
+SHOWS_RECENT = []
+
 __INITIALIZED__ = False
 
+NEWZNAB_DATA = None
 
 def get_backlog_cycle_time():
     cycletime = DAILYSEARCH_FREQUENCY * 2 + 7
@@ -550,14 +566,14 @@ def get_backlog_cycle_time():
 def initialize(consoleLogging=True):
     with INIT_LOCK:
 
-        global BRANCH, GIT_RESET, GIT_REMOTE, GIT_REMOTE_URL, CUR_COMMIT_HASH, CUR_COMMIT_BRANCH, ACTUAL_LOG_DIR, LOG_DIR, LOG_NR, LOG_SIZE, WEB_PORT, WEB_LOG, ENCRYPTION_VERSION, ENCRYPTION_SECRET, WEB_ROOT, WEB_USERNAME, WEB_PASSWORD, WEB_HOST, WEB_IPV6, WEB_COOKIE_SECRET, WEB_USE_GZIP, API_KEY, API_ROOT, ENABLE_HTTPS, HTTPS_CERT, HTTPS_KEY, \
+        global BRANCH, GIT_RESET, GIT_REMOTE, GIT_REMOTE_URL, CUR_COMMIT_HASH, CUR_COMMIT_BRANCH, GIT_NEWVER, ACTUAL_LOG_DIR, LOG_DIR, LOG_NR, LOG_SIZE, WEB_PORT, WEB_LOG, ENCRYPTION_VERSION, ENCRYPTION_SECRET, WEB_ROOT, WEB_USERNAME, WEB_PASSWORD, WEB_HOST, WEB_IPV6, WEB_COOKIE_SECRET, WEB_USE_GZIP, API_KEY, API_ROOT, ENABLE_HTTPS, HTTPS_CERT, HTTPS_KEY, \
             HANDLE_REVERSE_PROXY, USE_NZBS, USE_TORRENTS, NZB_METHOD, NZB_DIR, DOWNLOAD_PROPERS, RANDOMIZE_PROVIDERS, CHECK_PROPERS_INTERVAL, ALLOW_HIGH_PRIORITY, SAB_FORCED, TORRENT_METHOD, \
             SAB_USERNAME, SAB_PASSWORD, SAB_APIKEY, SAB_CATEGORY, SAB_CATEGORY_ANIME, SAB_HOST, \
             NZBGET_USERNAME, NZBGET_PASSWORD, NZBGET_CATEGORY, NZBGET_CATEGORY_ANIME, NZBGET_PRIORITY, NZBGET_HOST, NZBGET_USE_HTTPS, backlogSearchScheduler, \
             TORRENT_USERNAME, TORRENT_PASSWORD, TORRENT_HOST, TORRENT_PATH, TORRENT_SEED_TIME, TORRENT_PAUSED, TORRENT_HIGH_BANDWIDTH, TORRENT_LABEL, TORRENT_LABEL_ANIME, TORRENT_VERIFY_CERT, TORRENT_RPCURL, TORRENT_AUTH_TYPE, \
             USE_KODI, KODI_ALWAYS_ON, KODI_NOTIFY_ONSNATCH, KODI_NOTIFY_ONDOWNLOAD, KODI_NOTIFY_ONSUBTITLEDOWNLOAD, KODI_UPDATE_FULL, KODI_UPDATE_ONLYFIRST, \
             KODI_UPDATE_LIBRARY, KODI_HOST, KODI_USERNAME, KODI_PASSWORD, BACKLOG_FREQUENCY, \
-            USE_TRAKT, TRAKT_USERNAME, TRAKT_ACCESS_TOKEN, TRAKT_REFRESH_TOKEN, TRAKT_REMOVE_WATCHLIST, TRAKT_SYNC_WATCHLIST, TRAKT_REMOVE_SHOW_FROM_SICKRAGE, TRAKT_METHOD_ADD, TRAKT_START_PAUSED, traktCheckerScheduler, TRAKT_USE_RECOMMENDED, TRAKT_SYNC, TRAKT_SYNC_REMOVE, TRAKT_DEFAULT_INDEXER, TRAKT_REMOVE_SERIESLIST, TRAKT_TIMEOUT, TRAKT_BLACKLIST_NAME, USE_IMDB_POPULAR, \
+            USE_TRAKT, TRAKT_USERNAME, TRAKT_ACCESS_TOKEN, TRAKT_REFRESH_TOKEN, TRAKT_REMOVE_WATCHLIST, TRAKT_SYNC_WATCHLIST, TRAKT_REMOVE_SHOW_FROM_SICKRAGE, TRAKT_METHOD_ADD, TRAKT_START_PAUSED, traktCheckerScheduler, TRAKT_USE_RECOMMENDED, TRAKT_SYNC, TRAKT_SYNC_REMOVE, TRAKT_DEFAULT_INDEXER, TRAKT_REMOVE_SERIESLIST, TRAKT_TIMEOUT, TRAKT_BLACKLIST_NAME, \
             USE_PLEX, PLEX_NOTIFY_ONSNATCH, PLEX_NOTIFY_ONDOWNLOAD, PLEX_NOTIFY_ONSUBTITLEDOWNLOAD, PLEX_UPDATE_LIBRARY, USE_PLEX_CLIENT, PLEX_CLIENT_USERNAME, PLEX_CLIENT_PASSWORD, \
             PLEX_SERVER_HOST, PLEX_SERVER_TOKEN, PLEX_HOST, PLEX_USERNAME, PLEX_PASSWORD, DEFAULT_BACKLOG_FREQUENCY, MIN_BACKLOG_FREQUENCY, SKIP_REMOVED_FILES, \
             USE_EMBY, EMBY_HOST, EMBY_APIKEY, \
@@ -592,8 +608,8 @@ def initialize(consoleLogging=True):
             USE_FAILED_DOWNLOADS, DELETE_FAILED, ANON_REDIRECT, LOCALHOST_IP, TMDB_API_KEY, DEBUG, DEFAULT_PAGE, PROXY_SETTING, PROXY_INDEXERS, \
             AUTOPOSTPROCESSER_FREQUENCY, SHOWUPDATE_HOUR, DEFAULT_AUTOPOSTPROCESSER_FREQUENCY, MIN_AUTOPOSTPROCESSER_FREQUENCY, \
             ANIME_DEFAULT, NAMING_ANIME, ANIMESUPPORT, USE_ANIDB, ANIDB_USERNAME, ANIDB_PASSWORD, ANIDB_USE_MYLIST, \
-            ANIME_SPLIT_HOME, SCENE_DEFAULT, DOWNLOAD_URL, BACKLOG_DAYS, GIT_ORG, GIT_REPO, GIT_USERNAME, GIT_PASSWORD, \
-            GIT_AUTOISSUES, DEVELOPER, gh, DISPLAY_ALL_SEASONS, SSL_VERIFY
+            ANIME_SPLIT_HOME, SCENE_DEFAULT, ARCHIVE_DEFAULT, DOWNLOAD_URL, BACKLOG_DAYS, GIT_ORG, GIT_REPO, GIT_USERNAME, GIT_PASSWORD, \
+            GIT_AUTOISSUES, DEVELOPER, gh, DISPLAY_ALL_SEASONS, SSL_VERIFY, NEWS_URL, NEWS_LAST_READ, NEWS_LATEST, NEWS_UNREAD, SHOWS_RECENT
 
         if __INITIALIZED__:
             return False
@@ -631,6 +647,7 @@ def initialize(consoleLogging=True):
         # git login info
         GIT_USERNAME = check_setting_str(CFG, 'General', 'git_username', '')
         GIT_PASSWORD = check_setting_str(CFG, 'General', 'git_password', '', censor_log=True)
+        GIT_NEWVER = bool(check_setting_int(CFG, 'General', 'git_newver', 0))
         DEVELOPER = bool(check_setting_int(CFG, 'General', 'developer', 0))
 
         # debugging
@@ -655,7 +672,7 @@ def initialize(consoleLogging=True):
             gh = Github(user_agent="SiCKRAGE").get_organization(GIT_ORG).get_repo(GIT_REPO)
         except Exception as e:
             gh = None
-            logger.log('Unable to setup github properly, github will not be available. Error: {0}'.format(ex(e)),logger.WARNING)
+            logger.log('Unable to setup GitHub properly. GitHub will not be available. Error: %s' % ex(e), logger.WARNING)
 
         # git reset on update
         GIT_RESET = bool(check_setting_int(CFG, 'General', 'git_reset', 1))
@@ -666,7 +683,7 @@ def initialize(consoleLogging=True):
         # git_remote
         GIT_REMOTE = check_setting_str(CFG, 'General', 'git_remote', 'origin')
         GIT_REMOTE_URL = check_setting_str(CFG, 'General', 'git_remote_url',
-                                           'https://github.com/SiCKRAGETV/SickRage.git')
+                                           'https://github.com/%s/%s.git' % (GIT_ORG, GIT_REPO))
 
         # current commit hash
         CUR_COMMIT_HASH = check_setting_str(CFG, 'General', 'cur_commit_hash', '')
@@ -695,16 +712,14 @@ def initialize(consoleLogging=True):
             restoreDir = os.path.join(DATA_DIR, 'restore')
             if os.path.exists(restoreDir) and os.path.exists(os.path.join(restoreDir, 'cache')):
                 def restoreCache(srcDir, dstDir):
-                    import ntpath
-
                     def path_leaf(path):
-                        head, tail = ntpath.split(path)
-                        return tail or ntpath.basename(head)
+                        head, tail = os.path.split(path)
+                        return tail or os.path.basename(head)
 
                     try:
                         if os.path.isdir(dstDir):
                             bakFilename = '{0}-{1}'.format(path_leaf(dstDir), datetime.datetime.strftime(datetime.datetime.now(), '%Y%m%d_%H%M%S'))
-                            shutil.move(dstDir, os.path.join(ntpath.dirname(dstDir), bakFilename))
+                            shutil.move(dstDir, os.path.join(os.path.dirname(dstDir), bakFilename))
 
                         shutil.move(srcDir, dstDir)
                         logger.log(u"Restore: restoring cache successful", logger.INFO)
@@ -713,13 +728,19 @@ def initialize(consoleLogging=True):
 
                 restoreCache(os.path.join(restoreDir, 'cache'), CACHE_DIR)
         except Exception as e:
-            logger.log(u"Restore: restoring cache failed: {0}".format(str(e)), logger.ERROR)
+            logger.log(u"Restore: restoring cache failed: {0}".format(ex(e)), logger.ERROR)
         finally:
             if os.path.exists(os.path.join(DATA_DIR, 'restore')):
                 try:
                     shutil.rmtree(os.path.join(DATA_DIR, 'restore'))
                 except Exception as e:
-                    logger.log(u"Restore: Unable to remove the restore directory: {0}".format(str(e)), logger.ERROR)
+                    logger.log(u"Restore: Unable to remove the restore directory: {0}".format(ex(e)), logger.ERROR)
+
+                for cleanupDir in ['mako', 'sessions', 'indexers']:
+                    try:
+                        shutil.rmtree(os.path.join(CACHE_DIR, cleanupDir))
+                    except Exception as e:
+                        logger.log(u"Restore: Unable to remove the cache/{0} directory: {1}".format(cleanupDir, ex(e)), logger.WARNING)
 
 
         GUI_NAME = check_setting_str(CFG, 'GUI', 'gui_name', 'slick')
@@ -799,6 +820,7 @@ def initialize(consoleLogging=True):
         INDEXER_TIMEOUT = check_setting_int(CFG, 'General', 'indexer_timeout', 20)
         ANIME_DEFAULT = bool(check_setting_int(CFG, 'General', 'anime_default', 0))
         SCENE_DEFAULT = bool(check_setting_int(CFG, 'General', 'scene_default', 0))
+        ARCHIVE_DEFAULT = bool(check_setting_int(CFG, 'General', 'archive_default', 0))
 
         PROVIDER_ORDER = check_setting_str(CFG, 'General', 'provider_order', '').split()
 
@@ -866,6 +888,9 @@ def initialize(consoleLogging=True):
             SHOWUPDATE_HOUR = 0
 
         BACKLOG_DAYS = check_setting_int(CFG, 'General', 'backlog_days', 7)
+
+        NEWS_LAST_READ = check_setting_str(CFG, 'General', 'news_last_read', '1970-01-01')
+        NEWS_LATEST = NEWS_LAST_READ
 
         NZB_DIR = check_setting_str(CFG, 'Blackhole', 'nzb_dir', '')
         TORRENT_DIR = check_setting_str(CFG, 'Blackhole', 'torrent_dir', '')
@@ -981,7 +1006,7 @@ def initialize(consoleLogging=True):
             check_setting_int(CFG, 'Twitter', 'twitter_notify_onsubtitledownload', 0))
         TWITTER_USERNAME = check_setting_str(CFG, 'Twitter', 'twitter_username', '', censor_log=True)
         TWITTER_PASSWORD = check_setting_str(CFG, 'Twitter', 'twitter_password', '', censor_log=True)
-        TWITTER_PREFIX = check_setting_str(CFG, 'Twitter', 'twitter_prefix', 'SickRage')
+        TWITTER_PREFIX = check_setting_str(CFG, 'Twitter', 'twitter_prefix', GIT_REPO)
         TWITTER_DMTO = check_setting_str(CFG, 'Twitter', 'twitter_dmto', '')
         TWITTER_USEDM = bool(check_setting_int(CFG, 'Twitter', 'twitter_usedm', 0))
 
@@ -1047,8 +1072,6 @@ def initialize(consoleLogging=True):
         TRAKT_DEFAULT_INDEXER = check_setting_int(CFG, 'Trakt', 'trakt_default_indexer', 1)
         TRAKT_TIMEOUT = check_setting_int(CFG, 'Trakt', 'trakt_timeout', 30)
         TRAKT_BLACKLIST_NAME = check_setting_str(CFG, 'Trakt', 'trakt_blacklist_name', '')
-
-        USE_IMDB_POPULAR = bool(check_setting_int(CFG, 'IMDB', 'use_imdb_popular', 1))
 
         USE_PYTIVO = bool(check_setting_int(CFG, 'pyTivo', 'use_pytivo', 0))
         PYTIVO_NOTIFY_ONSNATCH = bool(check_setting_int(CFG, 'pyTivo', 'pytivo_notify_onsnatch', 0))
@@ -1568,9 +1591,9 @@ def halt():
 
 
 def sig_handler(signum=None, frame=None):
-    if type(signum) != type(None):
+    if not isinstance(signum, type(None)):
         logger.log(u"Signal %i caught, saving and exiting..." % int(signum))
-        events.put(events.SystemEvent.SHUTDOWN)
+        Shutdown.stop(PID)
 
 
 def saveAll():
@@ -1611,6 +1634,7 @@ def save_config():
     new_config['General']['git_remote_url'] = GIT_REMOTE_URL
     new_config['General']['cur_commit_hash'] = CUR_COMMIT_HASH
     new_config['General']['cur_commit_branch'] = CUR_COMMIT_BRANCH
+    new_config['General']['git_newver'] = int(GIT_NEWVER)
     new_config['General']['config_version'] = CONFIG_VERSION
     new_config['General']['encryption_version'] = int(ENCRYPTION_VERSION)
     new_config['General']['encryption_secret'] = ENCRYPTION_SECRET
@@ -1662,6 +1686,7 @@ def save_config():
     new_config['General']['indexer_timeout'] = int(INDEXER_TIMEOUT)
     new_config['General']['anime_default'] = int(ANIME_DEFAULT)
     new_config['General']['scene_default'] = int(SCENE_DEFAULT)
+    new_config['General']['archive_default'] = int(ARCHIVE_DEFAULT)
     new_config['General']['provider_order'] = ' '.join(PROVIDER_ORDER)
     new_config['General']['version_notify'] = int(VERSION_NOTIFY)
     new_config['General']['auto_update'] = int(AUTO_UPDATE)
@@ -1723,6 +1748,7 @@ def save_config():
     new_config['General']['no_restart'] = int(NO_RESTART)
     new_config['General']['developer'] = int(DEVELOPER)
     new_config['General']['display_all_seasons'] = int(DISPLAY_ALL_SEASONS)
+    new_config['General']['news_last_read'] = NEWS_LAST_READ
 
     new_config['Blackhole'] = {}
     new_config['Blackhole']['nzb_dir'] = NZB_DIR
@@ -1953,7 +1979,7 @@ def save_config():
     new_config['Pushover']['pushover_userkey'] = PUSHOVER_USERKEY
     new_config['Pushover']['pushover_apikey'] = PUSHOVER_APIKEY
     new_config['Pushover']['pushover_device'] = PUSHOVER_DEVICE
-    new_config['Pushover']['pushover_sound]'] = PUSHOVER_SOUND
+    new_config['Pushover']['pushover_sound'] = PUSHOVER_SOUND
 
     new_config['Libnotify'] = {}
     new_config['Libnotify']['use_libnotify'] = int(USE_LIBNOTIFY)
@@ -2000,9 +2026,6 @@ def save_config():
     new_config['Trakt']['trakt_default_indexer'] = int(TRAKT_DEFAULT_INDEXER)
     new_config['Trakt']['trakt_timeout'] = int(TRAKT_TIMEOUT)
     new_config['Trakt']['trakt_blacklist_name'] = TRAKT_BLACKLIST_NAME
-
-    new_config['IMDB'] = {}
-    new_config['IMDB']['use_imdb_popular'] = int(USE_IMDB_POPULAR)
 
     new_config['pyTivo'] = {}
     new_config['pyTivo']['use_pytivo'] = int(USE_PYTIVO)

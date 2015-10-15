@@ -25,9 +25,6 @@ from requests.auth import AuthBase
 import sickbeard
 import generic
 
-import requests
-from requests import exceptions
-
 from sickbeard.common import Quality
 from sickbeard import logger
 from sickbeard import tvcache
@@ -36,7 +33,6 @@ from sickbeard import db
 from sickbeard import helpers
 from sickbeard import classes
 from sickbeard.helpers import sanitizeSceneName
-from sickbeard.exceptions import ex
 
 
 class T411Provider(generic.TorrentProvider):
@@ -44,6 +40,7 @@ class T411Provider(generic.TorrentProvider):
         generic.TorrentProvider.__init__(self, "T411")
 
         self.supportsBacklog = True
+        self.public = False
         self.enabled = False
         self.username = None
         self.password = None
@@ -53,17 +50,15 @@ class T411Provider(generic.TorrentProvider):
 
         self.cache = T411Cache(self)
 
-        self.urls = {'base_url': 'http://www.t411.io/',
-                     'search': 'https://api.t411.io/torrents/search/%s?cid=%s&limit=100',
-                     'login_page': 'https://api.t411.io/auth',
-                     'download': 'https://api.t411.io/torrents/download/%s',
+        self.urls = {'base_url': 'http://www.t411.in/',
+                     'search': 'https://api.t411.in/torrents/search/%s?cid=%s&limit=100',
+                     'login_page': 'https://api.t411.in/auth',
+                     'download': 'https://api.t411.in/torrents/download/%s',
         }
 
         self.url = self.urls['base_url']
 
         self.subcategories = [433, 637, 455, 639]
-
-        self.session = requests.Session()
 
     def isEnabled(self):
         return self.enabled
@@ -87,10 +82,9 @@ class T411Provider(generic.TorrentProvider):
 
         logger.log('Performing authentication to T411', logger.DEBUG)
 
-        try:
-            response = helpers.getURL(self.urls['login_page'], post_data=login_params, timeout=30, session=self.session, json=True)
-        except (requests.exceptions.ConnectionError, requests.exceptions.HTTPError), e:
-            logger.log(u'Unable to connect to ' + self.name + ' provider: ' + ex(e), logger.WARNING)
+        response = self.getURL(self.urls['login_page'], post_data=login_params, timeout=30, json=True)
+        if not response:
+            logger.log(u'Unable to connect to ' + self.name + ' provider.', logger.WARNING)
             return False
 
         if response and 'token' in response:
@@ -178,7 +172,7 @@ class T411Provider(generic.TorrentProvider):
 
                         if not torrents:
                             logger.log(u"The Data returned from " + self.name + " do not contains any torrent",
-                                       logger.WARNING)
+                                       logger.DEBUG)
                             continue
 
                         for torrent in torrents:
