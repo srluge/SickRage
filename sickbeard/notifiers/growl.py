@@ -52,10 +52,10 @@ class GrowlNotifier:
 
     def _send_growl(self, options, message=None):
 
-        #Send Notification
+        # Send Notification
         notice = gntp.GNTPNotice()
 
-        #Required
+        # Required
         notice.add_header('Application-Name', options['app'])
         notice.add_header('Notification-Name', options['name'])
         notice.add_header('Notification-Title', options['title'])
@@ -63,7 +63,7 @@ class GrowlNotifier:
         if options['password']:
             notice.set_password(options['password'])
 
-        #Optional
+        # Optional
         if options['sticky']:
             notice.add_header('Notification-Sticky', options['sticky'])
         if options['priority']:
@@ -141,8 +141,8 @@ class GrowlNotifier:
                         return self._send_growl(opts, message)
                     else:
                         return False
-            except Exception, e:
-                logger.log(u"GROWL: Unable to send growl to " + opts['host'] + ":" + str(opts['port']) + " - " + ex(e), logger.WARNING)
+            except Exception as e:
+                logger.log(u"GROWL: Unable to send growl to " + opts['host'] + ":" + str(opts['port']) + " - {}".format(ex(e)), logger.WARNING)
                 return False
 
     def _sendRegistration(self, host=None, password=None, name='SickRage Notification'):
@@ -169,7 +169,7 @@ class GrowlNotifier:
         opts['app'] = 'SickRage'
         opts['debug'] = False
 
-        #Send Registration
+        # Send Registration
         register = gntp.GNTPRegister()
         register.add_header('Application-Name', opts['app'])
         register.add_header('Application-Icon', self.sr_logo_url)
@@ -184,8 +184,8 @@ class GrowlNotifier:
 
         try:
             return self._send(opts['host'], opts['port'], register.encode(), opts['debug'])
-        except Exception, e:
-            logger.log(u"GROWL: Unable to send growl to " + opts['host'] + ":" + str(opts['port']) + " - " + ex(e), logger.WARNING)
+        except Exception as e:
+            logger.log(u"GROWL: Unable to send growl to " + opts['host'] + ":" + str(opts['port']) + " - {}".format(ex(e)), logger.WARNING)
             return False
 
 

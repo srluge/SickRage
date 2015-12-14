@@ -14,9 +14,6 @@
     from sickbeard.common import Quality, statusStrings, Overview
 
     from sickrage.show.History import History
-
-    layout = sickbeard.HISTORY_LAYOUT
-    history_limit = sickbeard.HISTORY_LIMIT
 %>
 <%block name="scripts">
 <script type="text/javascript" src="${srRoot}/js/new/history.js"></script>
@@ -36,6 +33,8 @@
         <option value="100" ${('', 'selected="selected"')[limit == 100]}>100</option>
         <option value="250" ${('', 'selected="selected"')[limit == 250]}>250</option>
         <option value="500" ${('', 'selected="selected"')[limit == 500]}>500</option>
+        <option value="750" ${('', 'selected="selected"')[limit == 750]}>750</option>
+        <option value="1000" ${('', 'selected="selected"')[limit == 1000]}>1000</option>
         <option value="0"   ${('', 'selected="selected"')[limit == 0  ]}>All</option>
     </select>
 
@@ -48,7 +47,7 @@
 </div>
 <br>
 
-% if layout == "detailed":
+% if sickbeard.HISTORY_LAYOUT == "detailed":
     <table id="historyTable" class="sickbeardTable tablesorter" cellspacing="1" border="0" cellpadding="0">
         <thead>
             <tr>

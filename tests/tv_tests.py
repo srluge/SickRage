@@ -17,17 +17,18 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
 
-import unittest
-import test_lib as test
-
 import sys, os.path
 sys.path.insert(1, os.path.abspath(os.path.join(os.path.dirname(__file__), '../lib')))
 sys.path.insert(1, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+import unittest
+
+import test_lib as test
+
 import sickbeard
 from sickbeard.tv import TVEpisode, TVShow
 
-class TVShowTests(test.SickbeardTestDBCase):
+class TVShowTests(test.SiCKRAGETestDBCase):
 
     def setUp(self):
         super(TVShowTests, self).setUp()
@@ -65,7 +66,7 @@ class TVShowTests(test.SickbeardTestDBCase):
         self.assertEqual(show.name, "newName")
 
 
-class TVEpisodeTests(test.SickbeardTestDBCase):
+class TVEpisodeTests(test.SiCKRAGETestDBCase):
 
     def setUp(self):
         super(TVEpisodeTests, self).setUp()
@@ -80,7 +81,7 @@ class TVEpisodeTests(test.SickbeardTestDBCase):
         self.assertEqual(ep.name, "asdasdasdajkaj")
 
 
-class TVTests(test.SickbeardTestDBCase):
+class TVTests(test.SiCKRAGETestDBCase):
 
     def setUp(self):
         super(TVTests, self).setUp()

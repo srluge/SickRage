@@ -7,20 +7,18 @@
     from sickbeard import subtitles, sbdatetime, network_timezones
     import sickbeard.helpers
 
-    from sickbeard.common import SKIPPED, WANTED, UNAIRED, ARCHIVED, IGNORED, SNATCHED, SNATCHED_PROPER, SNATCHED_BEST, FAILED
+    from sickbeard.common import SKIPPED, WANTED, UNAIRED, ARCHIVED, IGNORED, FAILED
     from sickbeard.common import Quality, qualityPresets, statusStrings, Overview
-
     from sickbeard.helpers import anon_url
 %>
 <%block name="scripts">
 <script type="text/javascript" src="${srRoot}/js/lib/jquery.bookmarkscroll.js?${sbPID}"></script>
-<script type="text/javascript" src="${srRoot}/js/displayShow.js?${sbPID}"></script>
+<script type="text/javascript" src="${srRoot}/js/new/displayShow.js"></script>
 <script type="text/javascript" src="${srRoot}/js/plotTooltip.js?${sbPID}"></script>
 <script type="text/javascript" src="${srRoot}/js/sceneExceptionsTooltip.js?${sbPID}"></script>
 <script type="text/javascript" src="${srRoot}/js/ratingTooltip.js?${sbPID}"></script>
 <script type="text/javascript" src="${srRoot}/js/ajaxEpSearch.js?${sbPID}"></script>
 <script type="text/javascript" src="${srRoot}/js/ajaxEpSubtitles.js?${sbPID}"></script>
-<script type="text/javascript" src="${srRoot}/js/new/displayShow.js"></script>
 </%block>
 <%block name="content">
 <%namespace file="/inc_defs.mako" import="renderQualityPill"/>
@@ -162,7 +160,7 @@
                     ${renderQualityPill(show.quality)}
                 % else:
                 % if anyQualities:
-                    <i>Allowed:</i> ${", ".join([capture(renderQualityPill, x) for x in sorted(anyQualities)])}${("", "</br>")[bool(bestQualities)]}
+                    <i>Allowed:</i> ${", ".join([capture(renderQualityPill, x) for x in sorted(anyQualities)])}${("", "<br>")[bool(bestQualities)]}
                 % endif
                 % if bestQualities:
                     <i>Preferred:</i> ${", ".join([capture(renderQualityPill, x) for x in sorted(bestQualities)])}
@@ -214,16 +212,14 @@
                     % if sickbeard.USE_SUBTITLES:
                     <tr><td class="showLegend">Subtitles: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.subtitles)]}" alt="${("N", "Y")[bool(show.subtitles)]}" width="16" height="16" /></td></tr>
                     % endif
-                    <tr><td class="showLegend">Flat Folders: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.flatten_folders or sickbeard.NAMING_FORCE_FOLDERS)]}" alt=="${("N", "Y")[bool(show.flatten_folders or sickbeard.NAMING_FORCE_FOLDERS)]}" width="16" height="16" /></td></tr>
+                    <tr><td class="showLegend">Season Folders: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(not show.flatten_folders or sickbeard.NAMING_FORCE_FOLDERS)]}" alt=="${("N", "Y")[bool(not show.flatten_folders or sickbeard.NAMING_FORCE_FOLDERS)]}" width="16" height="16" /></td></tr>
                     <tr><td class="showLegend">Paused: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.paused)]}" alt="${("N", "Y")[bool(show.paused)]}" width="16" height="16" /></td></tr>
                     <tr><td class="showLegend">Air-by-Date: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.air_by_date)]}" alt="${("N", "Y")[bool(show.air_by_date)]}" width="16" height="16" /></td></tr>
                     <tr><td class="showLegend">Sports: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.is_sports)]}" alt="${("N", "Y")[bool(show.is_sports)]}" width="16" height="16" /></td></tr>
                     <tr><td class="showLegend">Anime: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.is_anime)]}" alt="${("N", "Y")[bool(show.is_anime)]}" width="16" height="16" /></td></tr>
                     <tr><td class="showLegend">DVD Order: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.dvdorder)]}" alt="${("N", "Y")[bool(show.dvdorder)]}" width="16" height="16" /></td></tr>
                     <tr><td class="showLegend">Scene Numbering: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.scene)]}" alt="${("N", "Y")[bool(show.scene)]}" width="16" height="16" /></td></tr>
-                    % if anyQualities and bestQualities:
                     <tr><td class="showLegend">Archive First Match: </td><td><img src="${srRoot}/images/${("no16.png", "yes16.png")[bool(show.archive_firstmatch)]}" alt="${("N", "Y")[bool(show.archive_firstmatch)]}" width="16" height="16" /></td></tr>
-                    % endif
                 </table>
             </div>
         </div>
@@ -247,17 +243,18 @@
         <input type="hidden" id="showID" value="${show.indexerid}" />
         <input type="hidden" id="indexer" value="${show.indexer}" />
         <input class="btn btn-inline" type="button" id="changeStatus" value="Go" />
+        <input class="btn btn-inline" type="button" id="deleteEpisode" value="Delete Episodes"/>
     </div>
 
     </br>
 
     <div class="pull-right clearfix" id="checkboxControls">
         <div style="padding-bottom: 5px;">
-            <label for="wanted"><span class="wanted"><input type="checkbox" id="wanted"checked="checked" /> Wanted: <b>${epCounts[Overview.WANTED]}</b></span></label>
-            <label for="qual"><span class="qual"><input type="checkbox" id="qual"checked="checked" /> Low Quality: <b>${epCounts[Overview.QUAL]}</b></span></label>
-            <label for="good"><span class="good"><input type="checkbox" id="good"checked="checked" /> Downloaded: <b>${epCounts[Overview.GOOD]}</b></span></label>
-            <label for="skipped"><span class="skipped"><input type="checkbox" id="skipped"checked="checked" /> Skipped: <b>${epCounts[Overview.SKIPPED]}</b></span></label>
-            <label for="snatched"><span class="snatched"><input type="checkbox" id="snatched"checked="checked" /> Snatched: <b>${epCounts[Overview.SNATCHED]}</b></span></label>
+            <label for="wanted"><span class="wanted"><input type="checkbox" id="wanted" checked="checked" /> Wanted: <b>${epCounts[Overview.WANTED]}</b></span></label>
+            <label for="qual"><span class="qual"><input type="checkbox" id="qual" checked="checked" /> Low Quality: <b>${epCounts[Overview.QUAL]}</b></span></label>
+            <label for="good"><span class="good"><input type="checkbox" id="good" checked="checked" /> Downloaded: <b>${epCounts[Overview.GOOD]}</b></span></label>
+            <label for="skipped"><span class="skipped"><input type="checkbox" id="skipped" checked="checked" /> Skipped: <b>${epCounts[Overview.SKIPPED]}</b></span></label>
+            <label for="snatched"><span class="snatched"><input type="checkbox" id="snatched" checked="checked" /> Snatched: <b>${epCounts[Overview.SNATCHED]}</b></span></label>
         </div>
 
         <button id="popover" type="button" class="btn btn-xs">Select Columns <b class="caret"></b></button>
@@ -273,47 +270,48 @@
 <table id="${("showTable", "animeTable")[bool(show.is_anime)]}" class="displayShowTable display_show" cellspacing="0" border="0" cellpadding="0">
     <% curSeason = -1 %>
     <% odd = 0 %>
-    % for epResult in sqlResults:
+    %  for epResult in sqlResults:
         <%
-        epStr = str(epResult["season"]) + "x" + str(epResult["episode"])
-        if not epStr in epCats:
-            continue
+            epStr = str(epResult["season"]) + "x" + str(epResult["episode"])
+            if not epStr in epCats:
+                continue
 
-        if not sickbeard.DISPLAY_SHOW_SPECIALS and int(epResult["season"]) == 0:
-            continue
+            if not sickbeard.DISPLAY_SHOW_SPECIALS and int(epResult["season"]) == 0:
+                continue
 
-        scene = False
-        scene_anime = False
-        if not show.air_by_date and not show.is_sports and not show.is_anime and show.is_scene:
-            scene = True
-        elif not show.air_by_date and not show.is_sports and show.is_anime and show.is_scene:
-            scene_anime = True
+            scene = False
+            scene_anime = False
+            if not show.air_by_date and not show.is_sports and not show.is_anime and show.is_scene:
+                scene = True
+            elif not show.air_by_date and not show.is_sports and show.is_anime and show.is_scene:
+                scene_anime = True
 
-        (dfltSeas, dfltEpis, dfltAbsolute) = (0, 0, 0)
-        if (epResult["season"], epResult["episode"]) in xem_numbering:
-            (dfltSeas, dfltEpis) = xem_numbering[(epResult["season"], epResult["episode"])]
+            (dfltSeas, dfltEpis, dfltAbsolute) = (0, 0, 0)
+            if (epResult["season"], epResult["episode"]) in xem_numbering:
+                (dfltSeas, dfltEpis) = xem_numbering[(epResult["season"], epResult["episode"])]
 
-        if epResult["absolute_number"] in xem_absolute_numbering:
-            dfltAbsolute = xem_absolute_numbering[epResult["absolute_number"]]
+            if epResult["absolute_number"] in xem_absolute_numbering:
+                dfltAbsolute = xem_absolute_numbering[epResult["absolute_number"]]
 
-        if epResult["absolute_number"] in scene_absolute_numbering:
-            scAbsolute = scene_absolute_numbering[epResult["absolute_number"]]
-            dfltAbsNumbering = False
-        else:
-            scAbsolute = dfltAbsolute
-            dfltAbsNumbering = True
+            if epResult["absolute_number"] in scene_absolute_numbering:
+                scAbsolute = scene_absolute_numbering[epResult["absolute_number"]]
+                dfltAbsNumbering = False
+            else:
+                scAbsolute = dfltAbsolute
+                dfltAbsNumbering = True
 
-        if (epResult["season"], epResult["episode"]) in scene_numbering:
-            (scSeas, scEpis) = scene_numbering[(epResult["season"], epResult["episode"])]
-            dfltEpNumbering = False
-        else:
-            (scSeas, scEpis) = (dfltSeas, dfltEpis)
-            dfltEpNumbering = True
+            if (epResult["season"], epResult["episode"]) in scene_numbering:
+                (scSeas, scEpis) = scene_numbering[(epResult["season"], epResult["episode"])]
+                dfltEpNumbering = False
+            else:
+                (scSeas, scEpis) = (dfltSeas, dfltEpis)
+                dfltEpNumbering = True
 
-        epLoc = epResult["location"]
-        if epLoc and show._location and epLoc.lower().startswith(show._location.lower()):
-            epLoc = epLoc[len(show._location)+1:]
+            epLoc = epResult["location"]
+            if epLoc and show._location and epLoc.lower().startswith(show._location.lower()):
+                epLoc = epLoc[len(show._location)+1:]
         %>
+
         % if int(epResult["season"]) != curSeason:
             % if curSeason == -1:
     <thead>
@@ -481,7 +479,11 @@
             <td class="col-airdate">
                 % if int(epResult['airdate']) != 1:
                     ## Lets do this exactly like ComingEpisodes and History
-                    <% airDate = sbdatetime.sbdatetime.convert_to_setting(network_timezones.parse_date_time(epResult['airdate'], show.airs, show.network)) %>
+                    ## Avoid issues with dateutil's _isdst on Windows but still provide air dates
+                    <% airDate = datetime.datetime.fromordinal(epResult['airdate']) %>
+                    % if airDate.year >= 1970 or show.network:
+                        <% airDate = sbdatetime.sbdatetime.convert_to_setting(network_timezones.parse_date_time(epResult['airdate'], show.airs, show.network)) %>
+                    % endif
                     <time datetime="${airDate.isoformat('T')}" class="date">${sbdatetime.sbdatetime.sbfdatetime(airDate)}</time>
                 % else:
                     Never
@@ -502,6 +504,9 @@
             <td class="col-subtitles" align="center">
             % for sub_lang in [subtitles.fromietf(x) for x in epResult["subtitles"].split(',') if epResult["subtitles"]]:
                 <% flag = sub_lang.opensubtitles %>
+                % if (not sickbeard.SUBTITLES_MULTI and len(subtitles.wantedLanguages()) is 1) and subtitles.wantedLanguages()[0] in sub_lang.opensubtitles:
+                    <% flag = 'checkbox' %>
+                % endif
                 <img src="${srRoot}/images/subtitles/flags/${flag}.png" width="16" height="11" alt="${sub_lang.name}" onError="this.onerror=null;this.src='${srRoot}/images/flags/unknown.png';" />
             % endfor
             </td>

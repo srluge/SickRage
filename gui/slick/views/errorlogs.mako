@@ -4,6 +4,15 @@
     from sickbeard import classes
     from sickbeard.logger import reverseNames
 %>
+<%block name="css">
+<style>
+pre {
+  overflow: auto;
+  word-wrap: normal;
+  white-space: pre;
+}
+</style>
+</%block>
 <%block name="scripts">
 <script type="text/javascript" src="${srRoot}/js/new/errorlogs.js"></script>
 </%block>
@@ -11,10 +20,10 @@
 <%
     if logLevel == sickbeard.logger.WARNING:
         errors = classes.WarningViewer.errors
-        title = 'Logs &amp Errors [WARNING]'
+        title = 'WARNING logs'
     else:
         errors = classes.ErrorViewer.errors
-        title = 'Logs &amp Errors [ERROR]'
+        title = 'ERROR logs'
 %>
 <h1 class="header">${title}</h1>
 <div class="align-left"><pre>

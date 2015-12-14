@@ -17,7 +17,6 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
 
 import requests
 import re
@@ -77,7 +76,7 @@ def getSeasonNZBs(name, urlData, season):
             xmlns = xmlnsMatch.group(1)
         match = re.search(regex, curFile.get("subject"), re.I)
         if not match:
-            #print curFile.get("subject"), "doesn't match", regex
+            # print curFile.get("subject"), "doesn't match", regex
             continue
         curEp = match.group(1)
         if curEp not in epFiles:
@@ -107,11 +106,11 @@ def saveNZB(nzbName, nzbString):
     :param nzbString: Content to write in file
     """
     try:
-        with ek(open, nzbName + ".nzb", 'w') as nzb_fh:
+        with ek(io.open, nzbName + ".nzb", 'w') as nzb_fh:
             nzb_fh.write(nzbString)
 
-    except EnvironmentError, e:
-        logger.log(u"Unable to save NZB: " + ex(e), logger.ERROR)
+    except EnvironmentError as e:
+        logger.log(u"Unable to save NZB: {}".format(ex(e)), logger.ERROR)
 
 
 def stripNS(element, ns):
@@ -129,7 +128,7 @@ def splitResult(result):
     :param result: search result object
     :return: False upon failure, a list of episode objects otherwise
     """
-    urlData = helpers.getURL(result.url, session=requests.Session())
+    urlData = helpers.getURL(result.url, session=requests.Session(), needBytes=True)
     if urlData is None:
         logger.log(u"Unable to load url " + result.url + ", can't download season NZB", logger.ERROR)
         return False

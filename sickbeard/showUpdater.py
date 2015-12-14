@@ -75,15 +75,15 @@ class ShowUpdater:
                     try:
                         piList.append(sickbeard.showQueueScheduler.action.updateShow(curShow, True))  # @UndefinedVariable
                     except CantUpdateShowException as e:
-                        logger.log("Unable to update show: {0}".format(str(e)),logger.DEBUG)
+                        logger.log(u"Unable to update show: {0}".format(str(e)),logger.DEBUG)
                 else:
                     logger.log(
                         u"Not updating episodes for show " + curShow.name + " because it's marked as ended and last/next episode is not within the grace period.",
                         logger.DEBUG)
                     piList.append(sickbeard.showQueueScheduler.action.refreshShow(curShow, True))  # @UndefinedVariable
 
-            except (CantUpdateShowException, CantRefreshShowException), e:
-                logger.log(u"Automatic update failed: " + ex(e), logger.ERROR)
+            except (CantUpdateShowException, CantRefreshShowException) as e:
+                logger.log(u"Automatic update failed: {}".format(ex(e)), logger.ERROR)
 
         ui.ProgressIndicators.setIndicator('dailyUpdate', ui.QueueProgressIndicator("Daily Update", piList))
 

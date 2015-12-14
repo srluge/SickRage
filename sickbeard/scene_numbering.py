@@ -218,7 +218,7 @@ def set_scene_numbering(indexer_id, indexer, season=None, episode=None, absolute
             "UPDATE scene_numbering SET scene_absolute_number = ? WHERE indexer = ? and indexer_id = ? and absolute_number = ?",
             [sceneAbsolute, indexer, indexer_id, absolute_number])
 
-    #Reload data from DB so that cache and db are in sync
+    # Reload data from DB so that cache and db are in sync
     show = helpers.findCertainShow(sickbeard.showList, indexer_id)
     show.flushEpisodes()
 
@@ -530,10 +530,10 @@ def xem_refresh(indexer_id, indexer, force=False):
                 myDB = db.DBConnection()
                 myDB.mass_action(cl)
 
-        except Exception, e:
+        except Exception as e:
             logger.log(
                 u"Exception while refreshing XEM data for show " + str(indexer_id) + " on " + sickbeard.indexerApi(
-                    indexer).name + ": " + ex(e), logger.WARNING)
+                    indexer).name + ": {}".format(ex(e)), logger.WARNING)
             logger.log(traceback.format_exc(), logger.DEBUG)
 
 

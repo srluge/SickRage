@@ -17,15 +17,14 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
-
-import unittest
-import datetime
-import re
 
 import sys, os.path
 sys.path.insert(1, os.path.abspath(os.path.join(os.path.dirname(__file__), '../lib')))
 sys.path.insert(1, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+import datetime
+import unittest
+import re
 
 import test_lib as test
 import sickbeard
@@ -33,7 +32,7 @@ from sickbeard.helpers import sanitizeSceneName
 from sickbeard.name_parser.parser import NameParser
 from sickbeard.tv import TVShow
 
-class XEMBasicTests(test.SickbeardTestDBCase):
+class XEMBasicTests(test.SiCKRAGETestDBCase):
     def loadShowsFromDB(self):
         """
         Populates the showList with shows from the database
@@ -61,7 +60,7 @@ class XEMBasicTests(test.SickbeardTestDBCase):
             try:
                 curShow = TVShow(int(sqlShow["indexer"]), int(sqlShow["indexer_id"]))
                 sickbeard.showList.append(curShow)
-            except Exception, e:
+            except Exception as e:
                 print "There was an error creating the show"
 
     def test_formating(self):
@@ -81,7 +80,7 @@ class XEMBasicTests(test.SickbeardTestDBCase):
 
 if __name__ == "__main__":
     print "=================="
-    print "STARTING - XEM Scene Numbering TESTS"
+    print "STARTING - XEM SCENE NUMBERING TESTS"
     print "=================="
     print "######################################################################"
     suite = unittest.TestLoader().loadTestsFromTestCase(XEMBasicTests)

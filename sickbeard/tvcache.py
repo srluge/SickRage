@@ -16,7 +16,6 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import with_statement
 
 import time
 import datetime
@@ -24,16 +23,15 @@ import itertools
 import urllib2
 
 import sickbeard
-
 from sickbeard import db
 from sickbeard import logger
-from sickbeard.common import Quality
 from sickbeard import helpers
-from sickbeard.rssfeeds import RSSFeeds
-from name_parser.parser import NameParser, InvalidNameException, InvalidShowException
+from sickbeard.common import Quality
+from sickbeard.rssfeeds import getFeed
 from sickbeard import show_name_helpers
 from sickrage.helper.encoding import ss
 from sickrage.helper.exceptions import AuthException, ex
+from sickbeard.name_parser.parser import NameParser, InvalidNameException, InvalidShowException
 
 
 class CacheDBConnection(db.DBConnection):
@@ -62,7 +60,7 @@ class CacheDBConnection(db.DBConnection):
             if not self.hasColumn(providerName, 'version'):
                 self.addColumn(providerName, 'version', "NUMERIC", "-1")
 
-        except Exception, e:
+        except Exception as e:
             if str(e) != "table [" + providerName + "] already exists":
                 raise
 
@@ -70,12 +68,12 @@ class CacheDBConnection(db.DBConnection):
         try:
             if not self.hasTable('lastUpdate'):
                 self.action("CREATE TABLE lastUpdate (provider TEXT, time NUMERIC)")
-        except Exception, e:
+        except Exception as e:
             if str(e) != "table lastUpdate already exists":
                 raise
 
 
-class TVCache():
+class TVCache(object):
     def __init__(self, provider):
         self.provider = provider
         self.providerID = self.provider.getID()
@@ -130,18 +128,16 @@ class TVCache():
                     myDB = self._getDB()
                     myDB.mass_action(cl)
 
-        except AuthException, e:
-            logger.log(u"Authentication error: " + ex(e), logger.ERROR)
-        except Exception, e:
+        except AuthException as e:
+            logger.log(u"Authentication error: {}".format(ex(e)), logger.ERROR)
+        except Exception as e:
             logger.log(u"Error while searching " + self.provider.name + ", skipping: " + repr(e), logger.DEBUG)
 
-    def getRSSFeed(self, url, post_data=None, items=[]):
+    def getRSSFeed(self, url):
         handlers = []
 
-        if self.provider.proxy.isEnabled():
-            self.provider.headers.update({'Referer': self.provider.proxy.getProxyURL()})
-        elif sickbeard.PROXY_SETTING:
-            logger.log("Using proxy for url: " + url, logger.DEBUG)
+        if sickbeard.PROXY_SETTING:
+            logger.log(u"Using global proxy for url: " + url, logger.DEBUG)
             scheme, address = urllib2.splittype(sickbeard.PROXY_SETTING)
             address = sickbeard.PROXY_SETTING if scheme else 'http://' + sickbeard.PROXY_SETTING
             handlers = [urllib2.ProxyHandler({'http': address, 'https': address})]
@@ -149,11 +145,9 @@ class TVCache():
         elif 'Referer' in self.provider.headers:
             self.provider.headers.pop('Referer')
 
-        return RSSFeeds(self.providerID).getFeed(
-            self.provider.proxy._buildURL(url),
-            post_data,
-            self.provider.headers,
-            items,
+        return getFeed(
+            url,
+            request_headers=self.provider.headers,
             handlers=handlers)
 
     def _translateTitle(self, title):
@@ -178,6 +172,8 @@ class TVCache():
             logger.log(
                 u"The data returned from the " + self.provider.name + " feed is incomplete, this result is unusable",
                 logger.DEBUG)
+
+        return False
 
     def _getLastUpdate(self):
         myDB = self._getDB()
@@ -298,14 +294,15 @@ class TVCache():
         neededEps = self.findNeededEpisodes(episode, manualSearch, downCurQuality)
         return neededEps[episode] if episode in neededEps else []
 
-    def listPropers(self, date=None, delimiter="."):
+    def listPropers(self, date=None):
         myDB = self._getDB()
         sql = "SELECT * FROM [" + self.providerID + "] WHERE name LIKE '%.PROPER.%' OR name LIKE '%.REPACK.%'"
 
         if date != None:
             sql += " AND time >= " + str(int(time.mktime(date.timetuple())))
 
-        return filter(lambda x: x['indexerid'] != 0, myDB.select(sql))
+        propers_results = myDB.select(sql)
+        return [x for x in propers_results if x['indexerid']]
 
 
     def findNeededEpisodes(self, episode, manualSearch=False, downCurQuality=False):
@@ -393,4 +390,3 @@ class TVCache():
         self.setLastSearch()
 
         return neededEps
-

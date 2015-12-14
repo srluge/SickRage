@@ -90,16 +90,16 @@ class pyTivoNotifier:
         request = Request(requestUrl)
 
         try:
-            response = urlopen(request)  #@UnusedVariable
-        except HTTPError , e:
+            response = urlopen(request)  # @UnusedVariable
+        except HTTPError  as e:
             if hasattr(e, 'reason'):
                 logger.log(u"pyTivo notification: Error, failed to reach a server - " + e.reason, logger.ERROR)
                 return False
             elif hasattr(e, 'code'):
                 logger.log(u"pyTivo notification: Error, the server couldn't fulfill the request - " + e.code, logger.ERROR)
             return False
-        except Exception, e:
-            logger.log(u"PYTIVO: Unknown exception: " + ex(e), logger.ERROR)
+        except Exception as e:
+            logger.log(u"PYTIVO: Unknown exception: {}".format(ex(e)), logger.ERROR)
             return False
         else:
             logger.log(u"pyTivo notification: Successfully requested transfer of file")

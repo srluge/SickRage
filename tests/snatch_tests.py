@@ -17,14 +17,14 @@
 # You should have received a copy of the GNU General Public License
 # along with SickRage.  If not, see <http://www.gnu.org/licenses/>.
 
+import sys, os.path
+sys.path.insert(1, os.path.abspath(os.path.join(os.path.dirname(__file__), '../lib')))
+sys.path.insert(1, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import random
 import unittest
 
 import test_lib as test
-
-import sys, os.path
-sys.path.insert(1, os.path.abspath(os.path.join(os.path.dirname(__file__), '../lib')))
-sys.path.insert(1, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import sickbeard.search as search
 import sickbeard
@@ -49,7 +49,7 @@ def _create_fake_xml(items):
 searchItems = []
 
 
-class SearchTest(test.SickbeardTestDBCase):
+class SearchTest(test.SiCKRAGETestDBCase):
 
     def _fake_getURL(self, url, headers=None):
         global searchItems
@@ -64,7 +64,7 @@ class SearchTest(test.SickbeardTestDBCase):
             #provider.isActive = self._fake_isActive
 
         super(SearchTest, self).__init__(something)
-
+        super(SearchTest, self).setUp()
 
 def test_generator(tvdbdid, show_name, curData, forceSearch):
 
@@ -91,7 +91,7 @@ def test_generator(tvdbdid, show_name, curData, forceSearch):
 
 if __name__ == '__main__':
     print "=================="
-    print "STARTING - Snatch TESTS"
+    print "STARTING - SNATCH TESTS"
     print "=================="
     print "######################################################################"
     # create the test methods

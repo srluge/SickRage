@@ -19,7 +19,7 @@
 
 import urllib
 
-import generic
+from sickbeard.providers import generic
 from sickbeard import logger
 from sickbeard import tvcache
 from sickbeard.helpers import mapIndexersToShow
@@ -30,19 +30,13 @@ class TitansOfTVProvider(generic.TorrentProvider):
     def __init__(self):
         generic.TorrentProvider.__init__(self, 'TitansOfTV')
         self.supportsBacklog = True
-        self.public = False
+
         self.supportsAbsoluteNumbering = True
         self.api_key = None
         self.ratio = None
         self.cache = TitansOfTVCache(self)
         self.url = 'http://titansof.tv/api/torrents'
         self.download_url = 'http://titansof.tv/api/torrents/%s/download?apikey=%s'
-
-    def isEnabled(self):
-        return self.enabled
-
-    def imageName(self):
-        return 'titansoftv.png'
 
     def seedRatio(self):
         return self.ratio
@@ -56,14 +50,12 @@ class TitansOfTVProvider(generic.TorrentProvider):
     def _checkAuthFromData(self, data):
 
         if 'error' in data:
-            logger.log(u'Incorrect authentication credentials for ' + self.name + ' : ' + data['error'],
-                       logger.DEBUG)
-            raise AuthException(
-                'Your authentication credentials for ' + self.name + ' are incorrect, check your config.')
+            logger.log(u"Invalid api key. Check your settings", logger.WARNING)
 
         return True
 
     def _doSearch(self, search_params, search_mode='eponly', epcount=0, age=0, epObj=None):
+        # FIXME ADD MODE
         self._checkAuth()
         results = []
         params = {}
@@ -72,37 +64,49 @@ class TitansOfTVProvider(generic.TorrentProvider):
         if search_params:
             params.update(search_params)
 
-        search_url = self.url + '?' + urllib.urlencode(params)
-        logger.log(u'Search url: %s' % search_url)
+        searchURL = self.url + '?' + urllib.urlencode(params)
+        logger.log(u"Search string: %s " % search_params, logger.DEBUG)
+        logger.log(u"Search URL: %s" %  searchURL, logger.DEBUG)
 
-        parsedJSON = self.getURL(search_url, json=True)  # do search
+        parsedJSON = self.getURL(searchURL, json=True)  # do search
 
         if not parsedJSON:
-            logger.log(u'No data returned from ' + self.name, logger.ERROR)
+            logger.log(u"No data returned from provider", logger.DEBUG)
             return results
 
         if self._checkAuthFromData(parsedJSON):
 
             try:
                 found_torrents = parsedJSON['results']
-            except:
+            except Exception:
                 found_torrents = {}
 
             for result in found_torrents:
-                (title, url) = self._get_title_and_url(result)
+                title = result.get('release_name', '')
+                tid = result.get('id', '')
+                download_url = self.download_url % (tid, self.api_key)
+                # FIXME size, seeders, leechers
+                size = -1
+                seeders = 1
+                leechers = 0
 
-                if title and url:
-                    results.append(result)
+                if not all([title, download_url]):
+                    continue
+
+                # Filter unseeded torrent
+                # if seeders < self.minseed or leechers < self.minleech:
+                #    if mode is not 'RSS':
+                #        logger.log(u"Discarding torrent because it doesn't meet the minimum seeders or leechers: {0} (S:{1} L:{2})".format(title, seeders, leechers), logger.DEBUG)
+                #    continue
+
+                item = title, download_url, size, seeders, leechers
+
+                logger.log(u"Found result: %s " % title, logger.DEBUG)
+                results.append(item)
+
+        # FIXME SORTING
 
         return results
-
-    def _get_title_and_url(self, parsedJSON):
-
-        title = parsedJSON['release_name']
-        id = parsedJSON['id']
-        url = self.download_url % (id, self.api_key)
-
-        return title, url
 
     def _get_season_search_strings(self, ep_obj):
         search_params = {'limit': 100}
@@ -139,8 +143,8 @@ class TitansOfTVProvider(generic.TorrentProvider):
 
 
 class TitansOfTVCache(tvcache.TVCache):
-    def __init__(self, provider):
-        tvcache.TVCache.__init__(self, provider)
+    def __init__(self, provider_obj):
+        tvcache.TVCache.__init__(self, provider_obj)
 
         # At least 10 minutes between queries
         self.minTime = 10

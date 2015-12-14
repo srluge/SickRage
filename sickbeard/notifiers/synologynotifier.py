@@ -52,10 +52,10 @@ class synologyNotifier:
         try:
             p = subprocess.Popen(synodsmnotify_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                  cwd=sickbeard.PROG_DIR)
-            out, err = p.communicate()  #@UnusedVariable
+            out, err = p.communicate()  # @UnusedVariable
             logger.log(u"Script result: " + str(out), logger.DEBUG)
-        except OSError, e:
-            logger.log(u"Unable to run synodsmnotify: " + ex(e))
+        except OSError as e:
+            logger.log(u"Unable to run synodsmnotify: {}".format(ex(e)))
 
 
 notifier = synologyNotifier
