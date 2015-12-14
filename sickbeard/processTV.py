@@ -620,7 +620,7 @@ def get_path_dir_files(dirName, nzbName, proc_type):
     else:
         # Post process downloaded content for one NZB/Torrent
 
-        path, dirs   = ek.ek(os.path.split, dirName)  #Script Post Processing
+        path, dirs   = ek(os.path.split, dirName)  #Script Post Processing
         torrent_type = get_torrent_type(dirName, nzbName)
 
         if torrent_type == TorrentType.SINGLE_FILE:
